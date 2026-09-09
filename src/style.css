@@ -1,0 +1,55 @@
+* {
+    box-sizing: border-box;
+    padding: 0;
+    margin: 0;
+}
+
+.row {
+    display: flex;
+}
+
+.board-outer {
+    position: relative;
+    & img, & .pip, & .border {
+        position: absolute;
+        transform: translate(calc(var(--x) * 4rem), calc(var(--y) * 4rem));
+        left: 0;
+        top: 0;
+        pointer-events: none;
+    }
+
+    & img {
+        width: 4rem;
+        height: 4rem;
+        object-fit: contain;
+
+        transition: transform 0.2s linear;
+    }
+
+    & .pip {
+        width: 1rem;
+        height: 1rem;
+        border-radius: 50%;
+        background-color: #ffbd88;
+        left: 1.5rem;
+        top: 1.5rem;
+
+        z-index: 1;
+    }
+
+    & .border {
+        width: 4rem;
+        height: 4rem;
+        border: 0.25rem solid #ffbd88;
+    }
+}
+
+.cell {
+    width: 4rem;
+    height: 4rem;
+    position: relative;
+
+    &.even {
+        background-color: #bbb;
+    }
+}
