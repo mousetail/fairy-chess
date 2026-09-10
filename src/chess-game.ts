@@ -1,47 +1,22 @@
+import {
+  applyMove,
+  pieceTypes,
+  simulateMove,
+  type ChessBoardState,
+  type Piece,
+  type SpecialMovement,
+  type TaggedMove,
+} from "./chess-board";
+import type { Tile } from "./chess-tile";
 import { type PieceImage } from "./images";
-import classicPieces from "./pieces/classic";
 import type { Behavior } from "./pieces/utils";
-
-export type SpecialMovement = {
-  to: Tile;
-  type: "move" | "capture";
-  promotion?: Promotion;
-  castling?: Castle;
-  passedTilesForEnPassant?: Tile[];
-};
-
-export type Promotion =
-  | {
-      state: "pending";
-      options: PieceType[];
-    }
-  | {
-      state: "resolved";
-      piece: PieceType;
-    };
-
-export type Castle = {
-  piece: Piece;
-  destination: Tile;
-};
-
-export function movementHasPendingPromotion(
-  m: SpecialMovement,
-): m is SpecialMovement & { promotion: { state: "pending" } } {
-  return m.promotion?.state === "pending";
-}
-export function movementHasNoPendingPromotion(
-  m: SpecialMovement,
-): m is SpecialMovement &
-  ({ promotion: undefined } | { promotion: { state: "resolved" } }) {
-  return !m.promotion || m.promotion.state === "resolved";
-}
 
 export interface PieceType {
   image: PieceImage;
   canEnPassant?: boolean;
 
   behavior: Behavior;
+  symbol: string;
 }
 
 type Player =
@@ -53,47 +28,8 @@ type Player =
       difficulty: number;
     };
 
-export const pieceTypes = {
-  ...classicPieces,
-} satisfies Record<string, PieceType>;
-
-export type Tile = {
-  x: number;
-  y: number;
-};
-
-export type Move = {
-  from: Tile;
-  to: Tile;
-  piece: PieceType;
-  color: "black" | "white";
-};
-
-export type Piece = {
-  type: PieceType;
-  color: "black" | "white";
-  position: Tile;
-  hasMoved: boolean;
-};
-
-function invertColor(color: "black" | "white"): "black" | "white" {
-  return color === "black" ? "white" : "black";
-}
-
-export type TaggedMove = SpecialMovement & {
-  piece: Piece;
-  from: Tile;
-};
-
 export class ChessGame {
-  pieces: Piece[] = [];
-  moves: Move[] = [];
-  turn: "black" | "white" = "white";
-  halfTurnNumber: number = 0;
-  canCastle: {
-    white: boolean;
-    black: boolean;
-  } = Object.freeze({ white: false, black: false });
+  state: ChessBoardState;
   players: {
     white: Player;
     black: Player;
@@ -102,11 +38,16 @@ export class ChessGame {
   lastMove: TaggedMove | undefined = undefined;
 
   constructor() {
-    this.canCastle = { ...this.canCastle };
+    this.state = {
+      pieces: [],
+      turn: "white",
+      halfTurnNumber: 0,
+      lastMove: undefined,
+    };
   }
 
   getPieceAt(tile: Tile): Piece | undefined {
-    return this.pieces.find(
+    return this.state.pieces.find(
       (piece) => piece.position.x === tile.x && piece.position.y === tile.y,
     );
   }
@@ -116,7 +57,32 @@ export class ChessGame {
   }
 
   getValidMoves(piece: Piece): SpecialMovement[] {
-    return piece.type.behavior(piece, this.pieces, this.lastMove);
+    const moves = piece.type.behavior(piece, this.state);
+    return moves.filter((move) => {
+      let moveWithPromotion = {
+        ...move,
+        piece,
+        from: piece.position,
+        promotion: undefined,
+      };
+
+      const simulated = simulateMove(this.state, moveWithPromotion);
+      const king = simulated.pieces.find(
+        (p) => p.type === pieceTypes.king && p.color === piece.color,
+      );
+      if (!king) return true;
+      return !this.state.pieces.some((enemy) => {
+        if (enemy.color === piece.color) return false;
+        return enemy.type
+          .behavior(enemy, simulated)
+          .some(
+            (m) =>
+              m.type === "capture" &&
+              m.to.x === king.position.x &&
+              m.to.y === king.position.y,
+          );
+      });
+    });
   }
 
   /**
@@ -127,48 +93,12 @@ export class ChessGame {
    * @param destroyPiece
    */
   movePiece(
-    piece: Piece,
-    move: SpecialMovement &
-      (
-        | { promotion: undefined }
-        | { promotion: { state: "resolved"; piece: PieceType } }
-      ),
-    movePiece: (piece: Piece, tile: Tile) => void,
-    destroyPiece: (piece: Piece) => void,
+    move: TaggedMove,
+    movePiece: (piece: number, tile: Tile) => void,
+    destroyPiece: (piece: number) => void,
     addPiece: (piece: Piece) => void,
   ): void {
-    let previousPiecePosition = piece.position;
-
-    let pieceAtTile =
-      this.getPieceAt(move.to) ??
-      (this.lastMove?.passedTilesForEnPassant?.find(
-        (t) => t.x === move.to.x && t.y === move.to.y,
-      ) &&
-        this.getPieceAt(this.lastMove.to!));
-    if (pieceAtTile) {
-      this.pieces = this.pieces.filter((p) => p !== pieceAtTile);
-      destroyPiece(pieceAtTile);
-    }
-    piece.position = move.to;
-    piece.hasMoved = true;
-    if (move.castling) {
-      const rook = move.castling.piece;
-      rook.position = move.castling.destination;
-      rook.hasMoved = true;
-      movePiece(rook, move.castling.destination);
-    }
-    movePiece(piece, move.to);
-
-    if (move.promotion) {
-      const promoted = { ...piece, type: move.promotion.piece };
-      this.pieces = this.pieces.map((p) => (p === piece ? promoted : p));
-      destroyPiece(piece);
-      addPiece(promoted);
-    }
-
-    this.lastMove = { ...move, from: previousPiecePosition, piece };
-
-    this.turn = invertColor(this.turn);
+    applyMove(this.state, move, movePiece, destroyPiece, addPiece);
   }
 
   static defaultLayout(): ChessGame {
@@ -184,31 +114,35 @@ export class ChessGame {
       pieceTypes.rook,
     ];
     for (let x = 0; x < 8; x++) {
-      board.pieces.push({
+      board.state.pieces.push({
         type: pieceTypes.pawn,
         color: "white",
         position: { x, y: 1 },
         hasMoved: false,
+        id: x,
       });
-      board.pieces.push({
+      board.state.pieces.push({
         type: pieceTypes.pawn,
         color: "black",
         position: { x, y: 6 },
         hasMoved: false,
+        id: x + 8,
       });
     }
     for (let x = 0; x < 8; x++) {
-      board.pieces.push({
+      board.state.pieces.push({
         type: back[x],
         color: "white",
         position: { x, y: 0 },
         hasMoved: false,
+        id: x + 16,
       });
-      board.pieces.push({
+      board.state.pieces.push({
         type: back[x],
         color: "black",
         position: { x, y: 7 },
         hasMoved: false,
+        id: x + 24,
       });
     }
     return board;

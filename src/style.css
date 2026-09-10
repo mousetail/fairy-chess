@@ -89,3 +89,16 @@ body {
     object-fit: contain;
   }
 }
+
+#app {
+  display: flex;
+}
+
+.moves-log {
+  display: grid;
+  width: 9rem;
+  grid-template-columns: 5rem 4rem;
+  grid-auto-rows: 1.5rem;
+  padding: 0.5rem;
+  gap: 0.5rem;
+}

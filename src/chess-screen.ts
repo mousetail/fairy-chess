@@ -1,22 +1,21 @@
 import {
-  ChessGame,
-  movementHasPendingPromotion,
   movementHasNoPendingPromotion,
-  pieceTypes,
-  type Move,
+  movementHasPendingPromotion,
+  specialMovementToPgn,
   type Piece,
-  type PieceType,
   type SpecialMovement,
   type TaggedMove,
-  type Tile,
-} from "./chess-game";
+} from "./chess-board";
+import { ChessGame } from "./chess-game";
+import type { Tile } from "./chess-tile";
 import type { Screen } from "./screen";
 
 export default class ChessScreen implements Screen {
   game: ChessGame;
   boardDiv: HTMLDivElement;
+  movesLog: HTMLDivElement;
   pips: HTMLDivElement[] = [];
-  piecesDivs: Map<Piece, HTMLImageElement> = new Map();
+  piecesDivs: Map<number, HTMLImageElement> = new Map();
 
   selectedPiece: { piece: Piece; moves: SpecialMovement[] } | null = null;
   handlingPromotion: boolean = false;
@@ -24,6 +23,7 @@ export default class ChessScreen implements Screen {
   constructor() {
     this.game = ChessGame.defaultLayout();
     this.boardDiv = document.createElement("div");
+    this.movesLog = document.createElement("div");
   }
 
   activate(parent: HTMLElement): void {
@@ -50,16 +50,21 @@ export default class ChessScreen implements Screen {
       boardDivInner.appendChild(row);
     }
     parent.appendChild(this.boardDiv);
-    for (const piece of this.game.pieces) {
+    for (const piece of this.game.state.pieces) {
       const image = document.createElement("img");
       image.classList.add("board-piece");
       image.src = piece.type.image[piece.color];
-      this.piecesDivs.set(piece, image);
+      this.piecesDivs.set(piece.id, image);
       this.boardDiv.appendChild(image);
 
       image.style.setProperty("--x", `${piece.position.x}`);
       image.style.setProperty("--y", `${piece.position.y}`);
     }
+
+    this.movesLog = document.createElement("div");
+    this.movesLog.classList.add("moves-log");
+
+    parent.appendChild(this.movesLog);
   }
 
   clearSelection(): void {
@@ -73,7 +78,7 @@ export default class ChessScreen implements Screen {
 
     const piece = this.game.getPieceAt(tile);
     if (
-      piece?.color === this.game.turn &&
+      piece?.color === this.game.state.turn &&
       this.game.players[piece.color].type === "human"
     ) {
       this.selectPiece(piece);
@@ -105,14 +110,25 @@ export default class ChessScreen implements Screen {
     move: SpecialMovement &
       ({ promotion: undefined } | { promotion: { state: "resolved" } }),
   ): void {
+    const taggedMove = { ...move, from: piece.position, piece };
+    this.addLogEntry(taggedMove);
     this.game.movePiece(
-      piece,
-      move,
+      taggedMove,
       this.movePiece.bind(this),
       this.destroyPiece.bind(this),
       this.addPiece.bind(this),
     );
     this.clearSelection();
+  }
+
+  addLogEntry(move: TaggedMove): void {
+    const div = document.createElement("div");
+    div.classList.add("move-log-entry");
+    this.movesLog.appendChild(div);
+    const moveNumber = Math.floor(this.movesLog.children.length / 2) + 1;
+    div.textContent =
+      (this.movesLog.children.length % 2 === 1 ? moveNumber + ". " : "") +
+      specialMovementToPgn(move, this.game.state);
   }
 
   showPromotionOptions(
@@ -150,25 +166,25 @@ export default class ChessScreen implements Screen {
     const image = document.createElement("img");
     image.classList.add("board-piece");
     image.src = piece.type.image[piece.color];
-    this.piecesDivs.set(piece, image);
+    this.piecesDivs.set(piece.id, image);
     this.boardDiv.appendChild(image);
     image.style.setProperty("--x", `${piece.position.x}`);
     image.style.setProperty("--y", `${piece.position.y}`);
   }
 
-  destroyPiece(piece: Piece): void {
-    const image = this.piecesDivs.get(piece);
+  destroyPiece(id: number): void {
+    const image = this.piecesDivs.get(id);
     if (!image) {
-      throw new Error(`Piece to destroy not found: ${piece}`);
+      throw new Error(`Piece to destroy not found: ${id}`);
     }
     image.remove();
-    this.piecesDivs.delete(piece);
+    this.piecesDivs.delete(id);
   }
 
-  movePiece(piece: Piece, tile: Tile): void {
-    const image = this.piecesDivs.get(piece);
+  movePiece(pieceId: number, tile: Tile): void {
+    const image = this.piecesDivs.get(pieceId);
     if (!image) {
-      throw new Error(`Piece to move not found: ${piece}`);
+      throw new Error(`Piece to move not found: ${pieceId}`);
     }
     image.style.setProperty("--x", `${tile.x}`);
     image.style.setProperty("--y", `${tile.y}`);
@@ -176,7 +192,7 @@ export default class ChessScreen implements Screen {
 
   selectPiece(piece: Piece): void {
     if (
-      piece.color === this.game.turn &&
+      piece.color === this.game.state.turn &&
       this.game.players[piece.color].type === "human"
     ) {
       this.clearSelection();

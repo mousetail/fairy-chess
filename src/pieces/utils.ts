@@ -1,10 +1,14 @@
-import type { Piece, SpecialMovement, TaggedMove, Tile } from "../chess-game";
-import { pieceTypes } from "../chess-game";
+import {
+  pieceTypes,
+  type ChessBoardState,
+  type Piece,
+  type SpecialMovement,
+} from "../chess-board";
+import type { Tile } from "../chess-tile";
 
 export type Behavior = (
   piece: Piece,
-  pieces: Piece[],
-  lastMove: TaggedMove | undefined,
+  state: ChessBoardState,
 ) => SpecialMovement[];
 
 function isInBounds(pos: Tile): boolean {
@@ -18,12 +22,12 @@ export function normalizeColor(
     isOccupiedByEnemy: (tile: Tile) => boolean,
   ) => SpecialMovement[],
 ): Behavior {
-  return (piece, pieces, lastMove) => {
+  return (piece, state) => {
+    const pieces = state.pieces;
+    const lastMove = state.lastMove;
     function invertIfBlack(pos: Tile): Tile {
       return piece.color === "black" ? { x: 7 - pos.x, y: 7 - pos.y } : pos;
     }
-
-    console.log(lastMove?.passedTilesForEnPassant);
 
     const moves = inner(
       invertIfBlack(piece.position),
@@ -58,7 +62,8 @@ export function normalizeColor(
 }
 
 export function jumpBehavior(directions: Tile[]): Behavior {
-  return (piece, pieces, _lastMove) => {
+  return (piece, state: ChessBoardState) => {
+    const pieces = state.pieces;
     return directions
       .map((dir) => ({
         tile: { x: piece.position.x + dir.x, y: piece.position.y + dir.y },
@@ -82,7 +87,8 @@ export function jumpBehavior(directions: Tile[]): Behavior {
 }
 
 export function moveBehavior(directions: Tile[]): Behavior {
-  return (piece, pieces) => {
+  return (piece, state) => {
+    const pieces = state.pieces;
     return directions.flatMap((dir) => {
       let position = {
         x: piece.position.x + dir.x,
@@ -132,7 +138,6 @@ export function pawnBehavior(
     !isOccupied(singleForward)
   ) {
     const move: SpecialMovement = { to: singleForward, type: "move" };
-    console.log("single forward.y", singleForward.y);
     moves.push(move);
   }
 
