@@ -1,5 +1,5 @@
 import type { Piece, SpecialMovement, TaggedMove, Tile } from "../chess-game";
-import { pieces } from "../chess-game";
+import { pieceTypes } from "../chess-game";
 
 export type Behavior = (
   piece: Piece,
@@ -172,7 +172,12 @@ export function pawnBehavior(
           ...move,
           promotion: {
             state: "pending",
-            options: [pieces.queen, pieces.rook, pieces.bishop, pieces.knight],
+            options: [
+              pieceTypes.queen,
+              pieceTypes.rook,
+              pieceTypes.bishop,
+              pieceTypes.knight,
+            ],
           },
         }
       : move,

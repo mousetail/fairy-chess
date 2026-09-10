@@ -2,7 +2,7 @@ import {
   ChessGame,
   movementHasPendingPromotion,
   movementHasNoPendingPromotion,
-  pieces,
+  pieceTypes,
   type Move,
   type Piece,
   type PieceType,

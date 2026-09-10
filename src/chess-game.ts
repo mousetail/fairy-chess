@@ -6,6 +6,7 @@ export type SpecialMovement = {
   to: Tile;
   type: "move" | "capture";
   promotion?: Promotion;
+  castling?: Castle;
   passedTilesForEnPassant?: Tile[];
 };
 
@@ -18,6 +19,11 @@ export type Promotion =
       state: "resolved";
       piece: PieceType;
     };
+
+export type Castle = {
+  piece: Piece;
+  destination: Tile;
+};
 
 export function movementHasPendingPromotion(
   m: SpecialMovement,
@@ -47,7 +53,7 @@ type Player =
       difficulty: number;
     };
 
-export const pieces = {
+export const pieceTypes = {
   ...classicPieces,
 } satisfies Record<string, PieceType>;
 
@@ -67,6 +73,7 @@ export type Piece = {
   type: PieceType;
   color: "black" | "white";
   position: Tile;
+  hasMoved: boolean;
 };
 
 function invertColor(color: "black" | "white"): "black" | "white" {
@@ -143,6 +150,13 @@ export class ChessGame {
       destroyPiece(pieceAtTile);
     }
     piece.position = move.to;
+    piece.hasMoved = true;
+    if (move.castling) {
+      const rook = move.castling.piece;
+      rook.position = move.castling.destination;
+      rook.hasMoved = true;
+      movePiece(rook, move.castling.destination);
+    }
     movePiece(piece, move.to);
 
     if (move.promotion) {
@@ -160,25 +174,27 @@ export class ChessGame {
   static defaultLayout(): ChessGame {
     const board = new ChessGame();
     const back = [
-      pieces.rook,
-      pieces.knight,
-      pieces.bishop,
-      pieces.queen,
-      pieces.king,
-      pieces.bishop,
-      pieces.knight,
-      pieces.rook,
+      pieceTypes.rook,
+      pieceTypes.knight,
+      pieceTypes.bishop,
+      pieceTypes.queen,
+      pieceTypes.king,
+      pieceTypes.bishop,
+      pieceTypes.knight,
+      pieceTypes.rook,
     ];
     for (let x = 0; x < 8; x++) {
       board.pieces.push({
-        type: pieces.pawn,
+        type: pieceTypes.pawn,
         color: "white",
         position: { x, y: 1 },
+        hasMoved: false,
       });
       board.pieces.push({
-        type: pieces.pawn,
+        type: pieceTypes.pawn,
         color: "black",
         position: { x, y: 6 },
+        hasMoved: false,
       });
     }
     for (let x = 0; x < 8; x++) {
@@ -186,11 +202,13 @@ export class ChessGame {
         type: back[x],
         color: "white",
         position: { x, y: 0 },
+        hasMoved: false,
       });
       board.pieces.push({
         type: back[x],
         color: "black",
         position: { x, y: 7 },
+        hasMoved: false,
       });
     }
     return board;
