@@ -1,6 +1,11 @@
 import type { Piece, SpecialMovement, TaggedMove, Tile } from "../chess-game";
+import { pieces } from "../chess-game";
 
-export type Behavior = (piece: Piece, pieces: Piece[], lastMove: TaggedMove | undefined) => SpecialMovement[];
+export type Behavior = (
+  piece: Piece,
+  pieces: Piece[],
+  lastMove: TaggedMove | undefined,
+) => SpecialMovement[];
 
 function isInBounds(pos: Tile): boolean {
   return pos.x >= 0 && pos.y >= 0 && pos.x < 8 && pos.y < 8;
@@ -30,14 +35,18 @@ export function normalizeColor(
         ),
       (tile: Tile) => {
         tile = invertIfBlack(tile);
-        return pieces.some(
-          (p) =>
-            tile.x === p.position.x &&
-            tile.y === p.position.y &&
-            p.color !== piece.color
-        ) || lastMove?.passedTilesForEnPassant?.some(
-          (t) => t.x === tile.x && t.y === tile.y
-        ) || false;
+        return (
+          pieces.some(
+            (p) =>
+              tile.x === p.position.x &&
+              tile.y === p.position.y &&
+              p.color !== piece.color,
+          ) ||
+          lastMove?.passedTilesForEnPassant?.some(
+            (t) => t.x === tile.x && t.y === tile.y,
+          ) ||
+          false
+        );
       },
     );
     return moves.map((move): SpecialMovement => ({
@@ -55,9 +64,7 @@ export function jumpBehavior(directions: Tile[]): Behavior {
         tile: { x: piece.position.x + dir.x, y: piece.position.y + dir.y },
       }))
       .filter((move) => {
-        if (
-          !isInBounds(move.tile)
-        ) {
+        if (!isInBounds(move.tile)) {
           return false;
         }
         const target = pieces.find(
@@ -125,10 +132,7 @@ export function pawnBehavior(
     !isOccupied(singleForward)
   ) {
     const move: SpecialMovement = { to: singleForward, type: "move" };
-    if (singleForward.y === 7) {
-      // Promotion on 8th rank
-      move.isPromotion = true;
-    }
+    console.log("single forward.y", singleForward.y);
     moves.push(move);
   }
 
@@ -162,5 +166,15 @@ export function pawnBehavior(
     }
   }
 
-  return moves;
+  return moves.map((move) =>
+    move.to.y === 7
+      ? {
+          ...move,
+          promotion: {
+            state: "pending",
+            options: [pieces.queen, pieces.rook, pieces.bishop, pieces.knight],
+          },
+        }
+      : move,
+  );
 }

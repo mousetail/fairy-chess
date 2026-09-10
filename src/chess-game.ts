@@ -5,9 +5,31 @@ import type { Behavior } from "./pieces/utils";
 export type SpecialMovement = {
   to: Tile;
   type: "move" | "capture";
-  isPromotion?: boolean;
+  promotion?: Promotion;
   passedTilesForEnPassant?: Tile[];
 };
+
+export type Promotion =
+  | {
+      state: "pending";
+      options: PieceType[];
+    }
+  | {
+      state: "resolved";
+      piece: PieceType;
+    };
+
+export function movementHasPendingPromotion(
+  m: SpecialMovement,
+): m is SpecialMovement & { promotion: { state: "pending" } } {
+  return m.promotion?.state === "pending";
+}
+export function movementHasNoPendingPromotion(
+  m: SpecialMovement,
+): m is SpecialMovement &
+  ({ promotion: undefined } | { promotion: { state: "resolved" } }) {
+  return !m.promotion || m.promotion.state === "resolved";
+}
 
 export interface PieceType {
   image: PieceImage;
@@ -87,7 +109,7 @@ export class ChessGame {
   }
 
   getValidMoves(piece: Piece): SpecialMovement[] {
-    return piece.type.behavior(piece, this.pieces, this.lastMove)
+    return piece.type.behavior(piece, this.pieces, this.lastMove);
   }
 
   /**
@@ -99,15 +121,23 @@ export class ChessGame {
    */
   movePiece(
     piece: Piece,
-    move: SpecialMovement,
+    move: SpecialMovement &
+      (
+        | { promotion: undefined }
+        | { promotion: { state: "resolved"; piece: PieceType } }
+      ),
     movePiece: (piece: Piece, tile: Tile) => void,
     destroyPiece: (piece: Piece) => void,
+    addPiece: (piece: Piece) => void,
   ): void {
     let previousPiecePosition = piece.position;
 
     let pieceAtTile =
       this.getPieceAt(move.to) ??
-      (this.lastMove?.passedTilesForEnPassant?.find((t) => t.x === move.to.x && t.y === move.to.y) && this.getPieceAt(this.lastMove.to!));
+      (this.lastMove?.passedTilesForEnPassant?.find(
+        (t) => t.x === move.to.x && t.y === move.to.y,
+      ) &&
+        this.getPieceAt(this.lastMove.to!));
     if (pieceAtTile) {
       this.pieces = this.pieces.filter((p) => p !== pieceAtTile);
       destroyPiece(pieceAtTile);
@@ -115,7 +145,14 @@ export class ChessGame {
     piece.position = move.to;
     movePiece(piece, move.to);
 
-    this.lastMove = {...move, from: previousPiecePosition, piece};
+    if (move.promotion) {
+      const promoted = { ...piece, type: move.promotion.piece };
+      this.pieces = this.pieces.map((p) => (p === piece ? promoted : p));
+      destroyPiece(piece);
+      addPiece(promoted);
+    }
+
+    this.lastMove = { ...move, from: previousPiecePosition, piece };
 
     this.turn = invertColor(this.turn);
   }

@@ -1,6 +1,11 @@
 import type { PieceType } from "../chess-game";
 import images from "../images";
-import { jumpBehavior, moveBehavior, pawnBehavior, normalizeColor } from "./utils";
+import {
+  jumpBehavior,
+  moveBehavior,
+  pawnBehavior,
+  normalizeColor,
+} from "./utils";
 
 const classicPieces = {
   pawn: {
@@ -13,7 +18,7 @@ const classicPieces = {
       { x: -1, y: 0 },
       { x: 1, y: 0 },
       { x: 0, y: -1 },
-      { x: 0, y: 1 }
+      { x: 0, y: 1 },
     ]),
   },
   knight: {
@@ -26,7 +31,7 @@ const classicPieces = {
       { x: -1, y: -2 },
       { x: -1, y: 2 },
       { x: 1, y: -2 },
-      { x: 1, y: 2 }
+      { x: 1, y: 2 },
     ]),
   },
   bishop: {
@@ -35,7 +40,7 @@ const classicPieces = {
       { x: 1, y: 1 },
       { x: 1, y: -1 },
       { x: -1, y: 1 },
-      { x: -1, y: -1 }
+      { x: -1, y: -1 },
     ]),
   },
   queen: {
