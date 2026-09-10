@@ -3,7 +3,7 @@ import classicPieces from "./pieces/classic";
 import type { Behavior } from "./pieces/utils";
 
 export type SpecialMovement = {
-  tile: Tile;
+  to: Tile;
   type: "move" | "capture";
   isPromotion?: boolean;
   passedTilesForEnPassant?: Tile[];
@@ -25,18 +25,14 @@ type Player =
       difficulty: number;
     };
 
-export const pieces: Record<string, PieceType> = {
+export const pieces = {
   ...classicPieces,
-};
+} satisfies Record<string, PieceType>;
 
 export type Tile = {
   x: number;
   y: number;
 };
-
-function isTile(t: Tile | SpecialMovement): t is Tile {
-  return Object.hasOwn(t, "x") && Object.hasOwn(t, "y");
-}
 
 export type Move = {
   from: Tile;
@@ -51,17 +47,13 @@ export type Piece = {
   position: Tile;
 };
 
-function invert(tile: Tile): Tile {
-  return { x: 7 - tile.x, y: 7 - tile.y };
-}
-
 function invertColor(color: "black" | "white"): "black" | "white" {
   return color === "black" ? "white" : "black";
 }
 
-export type TaggedMove = {
-  move: SpecialMovement;
-  moveType: "move" | "capture";
+export type TaggedMove = SpecialMovement & {
+  piece: Piece;
+  from: Tile;
 };
 
 export class ChessGame {
@@ -78,9 +70,7 @@ export class ChessGame {
     black: Player;
   } = Object.freeze({ white: { type: "human" }, black: { type: "human" } });
 
-  lastMoveFrom: Tile | undefined;
-  lastMoveTo: Tile | undefined;
-  lastMoveEnPassant: Tile[] | undefined;
+  lastMove: TaggedMove | undefined = undefined;
 
   constructor() {
     this.canCastle = { ...this.canCastle };
@@ -97,7 +87,7 @@ export class ChessGame {
   }
 
   getValidMoves(piece: Piece): SpecialMovement[] {
-    return piece.type.behavior(piece, this.pieces)
+    return piece.type.behavior(piece, this.pieces, this.lastMove)
   }
 
   /**
@@ -113,21 +103,19 @@ export class ChessGame {
     movePiece: (piece: Piece, tile: Tile) => void,
     destroyPiece: (piece: Piece) => void,
   ): void {
-    const oldPiecePosition = piece.position;
+    let previousPiecePosition = piece.position;
 
     let pieceAtTile =
-      this.getPieceAt(move.tile) ??
-      (this.lastMoveEnPassant?.find((t) => t.x === move.tile.x && t.y === move.tile.y) && this.getPieceAt(this.lastMoveTo!));
+      this.getPieceAt(move.to) ??
+      (this.lastMove?.passedTilesForEnPassant?.find((t) => t.x === move.to.x && t.y === move.to.y) && this.getPieceAt(this.lastMove.to!));
     if (pieceAtTile) {
       this.pieces = this.pieces.filter((p) => p !== pieceAtTile);
       destroyPiece(pieceAtTile);
     }
-    piece.position = move.tile;
-    movePiece(piece, move.tile);
+    piece.position = move.to;
+    movePiece(piece, move.to);
 
-    this.lastMoveFrom = oldPiecePosition;
-    this.lastMoveTo = move.tile;
-    this.lastMoveEnPassant = move.passedTilesForEnPassant;
+    this.lastMove = {...move, from: previousPiecePosition, piece};
 
     this.turn = invertColor(this.turn);
   }

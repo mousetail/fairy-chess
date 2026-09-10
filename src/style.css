@@ -12,7 +12,7 @@
     position: relative;
     & img, & .pip, & .border {
         position: absolute;
-        transform: translate(calc(var(--x) * 4rem), calc(var(--y) * 4rem));
+        transform: translate(calc(var(--x) * 4rem), calc((7 - var(--y)) * 4rem));
         left: 0;
         top: 0;
         pointer-events: none;
@@ -48,8 +48,9 @@
     width: 4rem;
     height: 4rem;
     position: relative;
+    background-color: #bbb;
 
     &.even {
-        background-color: #bbb;
+        background-color: white;
     }
 }

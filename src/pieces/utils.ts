@@ -1,6 +1,10 @@
-import type { Piece, SpecialMovement, Tile } from "../chess-game";
+import type { Piece, SpecialMovement, TaggedMove, Tile } from "../chess-game";
 
-export type Behavior = (piece: Piece, pieces: Piece[]) => SpecialMovement[];
+export type Behavior = (piece: Piece, pieces: Piece[], lastMove: TaggedMove | undefined) => SpecialMovement[];
+
+function isInBounds(pos: Tile): boolean {
+  return pos.x >= 0 && pos.y >= 0 && pos.x < 8 && pos.y < 8;
+}
 
 export function normalizeColor(
   inner: (
@@ -9,10 +13,12 @@ export function normalizeColor(
     isOccupiedByEnemy: (tile: Tile) => boolean,
   ) => SpecialMovement[],
 ): Behavior {
-  return (piece, pieces) => {
+  return (piece, pieces, lastMove) => {
     function invertIfBlack(pos: Tile): Tile {
       return piece.color === "black" ? { x: 7 - pos.x, y: 7 - pos.y } : pos;
     }
+
+    console.log(lastMove?.passedTilesForEnPassant);
 
     const moves = inner(
       invertIfBlack(piece.position),
@@ -22,34 +28,35 @@ export function normalizeColor(
             invertIfBlack(p.position).x === tile.x &&
             invertIfBlack(p.position).y === tile.y,
         ),
-      (tile: Tile) =>
-        pieces.some(
+      (tile: Tile) => {
+        tile = invertIfBlack(tile);
+        return pieces.some(
           (p) =>
-            invertIfBlack(p.position).x === tile.x &&
-            invertIfBlack(p.position).y === tile.y &&
-            p.color !== piece.color,
-        ),
+            tile.x === p.position.x &&
+            tile.y === p.position.y &&
+            p.color !== piece.color
+        ) || lastMove?.passedTilesForEnPassant?.some(
+          (t) => t.x === tile.x && t.y === tile.y
+        ) || false;
+      },
     );
-    return moves.map((move) => ({
+    return moves.map((move): SpecialMovement => ({
       ...move,
-      tile: invertIfBlack(move.tile),
-      canEnPassantTo: move.passedTilesForEnPassant?.map(invertIfBlack),
+      to: invertIfBlack(move.to),
+      passedTilesForEnPassant: move.passedTilesForEnPassant?.map(invertIfBlack),
     }));
   };
 }
 
 export function jumpBehavior(directions: Tile[]): Behavior {
-  return (piece, pieces) => {
+  return (piece, pieces, _lastMove) => {
     return directions
       .map((dir) => ({
         tile: { x: piece.position.x + dir.x, y: piece.position.y + dir.y },
       }))
       .filter((move) => {
         if (
-          move.tile.x < 0 ||
-          move.tile.y < 0 ||
-          move.tile.x >= 8 ||
-          move.tile.y >= 8
+          !isInBounds(move.tile)
         ) {
           return false;
         }
@@ -62,7 +69,7 @@ export function jumpBehavior(directions: Tile[]): Behavior {
         const target = pieces.find(
           (p) => p.position.x === move.tile.x && p.position.y === move.tile.y,
         );
-        return { tile: move.tile, type: target ? "capture" : "move" };
+        return { to: move.tile, type: target ? "capture" : "move" };
       });
   };
 }
@@ -76,23 +83,17 @@ export function moveBehavior(directions: Tile[]): Behavior {
       };
       let tiles: SpecialMovement[] = [];
       while (
-        position.x >= 0 &&
-        position.y >= 0 &&
-        position.x < 8 &&
-        position.y < 8 &&
+        isInBounds(position) &&
         !pieces.some(
           (p) => p.position.x === position.x && p.position.y === position.y,
         )
       ) {
-        tiles.push({ tile: { ...position }, type: "move" });
+        tiles.push({ to: { ...position }, type: "move" });
         position.x += dir.x;
         position.y += dir.y;
       }
       if (
-        position.x >= 0 &&
-        position.y >= 0 &&
-        position.x < 8 &&
-        position.y < 8 &&
+        isInBounds(position) &&
         pieces.some(
           (p) =>
             p.position.x === position.x &&
@@ -100,7 +101,7 @@ export function moveBehavior(directions: Tile[]): Behavior {
             p.color != piece.color,
         )
       ) {
-        tiles.push({ tile: { ...position }, type: "capture" });
+        tiles.push({ to: { ...position }, type: "capture" });
       }
 
       return tiles;
@@ -114,7 +115,7 @@ export function pawnBehavior(
   isOccupiedByEnemy: (tile: Tile) => boolean,
 ): SpecialMovement[] {
   const moves: SpecialMovement[] = [];
-  const direction = 1; // White moves up (decreasing y)
+  const direction = 1; // White moves up (increasing y)
 
   // Single move forward
   const singleForward = { x: position.x, y: position.y + direction };
@@ -123,7 +124,7 @@ export function pawnBehavior(
     singleForward.y < 8 &&
     !isOccupied(singleForward)
   ) {
-    const move: SpecialMovement = { tile: singleForward, type: "move" };
+    const move: SpecialMovement = { to: singleForward, type: "move" };
     if (singleForward.y === 7) {
       // Promotion on 8th rank
       move.isPromotion = true;
@@ -138,10 +139,11 @@ export function pawnBehavior(
     if (
       doubleForward.y >= 0 &&
       doubleForward.y < 8 &&
-      !isOccupied(doubleForward)
+      !isOccupied(doubleForward) &&
+      !isOccupied(singleForward)
     ) {
       moves.push({
-        tile: doubleForward,
+        to: doubleForward,
         type: "move",
         passedTilesForEnPassant: [singleForward],
       });
@@ -155,7 +157,7 @@ export function pawnBehavior(
   for (const capture of [captureLeft, captureRight]) {
     if (capture.x >= 0 && capture.x < 8 && capture.y >= 0 && capture.y < 8) {
       if (isOccupiedByEnemy(capture)) {
-        moves.push({ tile: capture, type: "capture" });
+        moves.push({ to: capture, type: "capture" });
       }
     }
   }

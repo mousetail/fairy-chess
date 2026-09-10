@@ -30,7 +30,7 @@ export default class ChessScreen implements Screen {
         cell.classList.add("cell", (i + j) % 2 == 0 ? "even" : "odd");
 
         cell.addEventListener("click", () => {
-          this.clickTile({ x: j, y: i });
+          this.clickTile({ x: j, y: 7 - i });
         });
 
         row.appendChild(cell);
@@ -64,7 +64,7 @@ export default class ChessScreen implements Screen {
       this.selectPiece(piece);
     } else if (this.selectedPiece !== null) {
       const move = this.selectedPiece.moves.find(
-        (move) => move.tile.x === tile.x && move.tile.y === tile.y,
+        (move) => move.to.x === tile.x && move.to.y === tile.y,
       )
       if (
         move
@@ -114,8 +114,8 @@ export default class ChessScreen implements Screen {
       for (const move of moves) {
         const pip = document.createElement("div");
         pip.classList.add(move.type === 'capture' ? 'border' : 'pip');
-        pip.style.setProperty('--x', `${move.tile.x}`);
-        pip.style.setProperty('--y', `${move.tile.y}`);
+        pip.style.setProperty('--x', `${move.to.x}`);
+        pip.style.setProperty('--y', `${move.to.y}`);
 
         this.boardDiv.appendChild(pip);
 

@@ -2,7 +2,7 @@ import type { PieceType } from "../chess-game";
 import images from "../images";
 import { jumpBehavior, moveBehavior, pawnBehavior, normalizeColor } from "./utils";
 
-const classicPieces: Record<string, PieceType> = {
+const classicPieces = {
   pawn: {
     image: images.classic.pawn,
     behavior: normalizeColor(pawnBehavior),
@@ -64,6 +64,6 @@ const classicPieces: Record<string, PieceType> = {
       { x: -1, y: -1 },
     ]),
   },
-};
+} satisfies Record<string, PieceType>;
 
 export default classicPieces;
