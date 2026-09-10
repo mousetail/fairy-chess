@@ -110,6 +110,27 @@ function cloneChessBoardState(state: ChessBoardState): ChessBoardState {
   };
 }
 
+export function isInCheck(
+  color: "black" | "white",
+  board: ChessBoardState,
+): boolean {
+  const king = board.pieces.find(
+    (p) => p.type === pieceTypes.king && p.color === color,
+  );
+  if (!king) return false;
+  return board.pieces.some((enemy) => {
+    if (enemy.color === king.color) return false;
+    return enemy.type
+      .behavior(enemy, board)
+      .some(
+        (m) =>
+          m.type === "capture" &&
+          m.to.x === king.position.x &&
+          m.to.y === king.position.y,
+      );
+  });
+}
+
 export function simulateMove(
   state: ChessBoardState,
   move: TaggedMove,

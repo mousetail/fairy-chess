@@ -1,5 +1,6 @@
 import {
   applyMove,
+  isInCheck,
   pieceTypes,
   simulateMove,
   type ChessBoardState,
@@ -67,21 +68,7 @@ export class ChessGame {
       };
 
       const simulated = simulateMove(this.state, moveWithPromotion);
-      const king = simulated.pieces.find(
-        (p) => p.type === pieceTypes.king && p.color === piece.color,
-      );
-      if (!king) return true;
-      return !this.state.pieces.some((enemy) => {
-        if (enemy.color === piece.color) return false;
-        return enemy.type
-          .behavior(enemy, simulated)
-          .some(
-            (m) =>
-              m.type === "capture" &&
-              m.to.x === king.position.x &&
-              m.to.y === king.position.y,
-          );
-      });
+      return !isInCheck(piece.color, simulated);
     });
   }
 
