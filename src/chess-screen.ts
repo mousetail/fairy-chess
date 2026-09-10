@@ -1,4 +1,5 @@
 import {
+  cloneChessBoardState,
   movementHasNoPendingPromotion,
   movementHasPendingPromotion,
   specialMovementToPgn,
@@ -8,6 +9,7 @@ import {
 } from "./chess-board";
 import { ChessGame } from "./chess-game";
 import type { Tile } from "./chess-tile";
+import { HistoryBar } from "./history-bar";
 import type { Screen } from "./screen";
 
 export default class ChessScreen implements Screen {
@@ -16,9 +18,11 @@ export default class ChessScreen implements Screen {
   movesLog: HTMLDivElement;
   pips: HTMLDivElement[] = [];
   piecesDivs: Map<number, HTMLImageElement> = new Map();
+  historyBar: HistoryBar | null = null;
 
   selectedPiece: { piece: Piece; moves: SpecialMovement[] } | null = null;
   handlingPromotion: boolean = false;
+  highlightedTiles: HTMLDivElement[] = [];
 
   constructor() {
     this.game = ChessGame.defaultLayout();
@@ -61,10 +65,16 @@ export default class ChessScreen implements Screen {
       image.style.setProperty("--y", `${piece.position.y}`);
     }
 
-    this.movesLog = document.createElement("div");
-    this.movesLog.classList.add("moves-log");
-
-    parent.appendChild(this.movesLog);
+    this.historyBar = new HistoryBar(parent, (state) => {
+      this.piecesDivs.forEach((i) => i.remove());
+      this.piecesDivs.clear();
+      for (const piece of state.pieces) {
+        this.addPiece(piece);
+      }
+      if (state.lastMove) {
+        this.setHighlightedMoves(state.lastMove);
+      }
+    });
   }
 
   clearSelection(): void {
@@ -111,24 +121,17 @@ export default class ChessScreen implements Screen {
       ({ promotion: undefined } | { promotion: { state: "resolved" } }),
   ): void {
     const taggedMove = { ...move, from: piece.position, piece };
-    this.addLogEntry(taggedMove);
+    const pgn = specialMovementToPgn(taggedMove, this.game.state);
     this.game.movePiece(
       taggedMove,
       this.movePiece.bind(this),
       this.destroyPiece.bind(this),
       this.addPiece.bind(this),
     );
-    this.clearSelection();
-  }
+    this.setHighlightedMoves(taggedMove);
 
-  addLogEntry(move: TaggedMove): void {
-    const div = document.createElement("div");
-    div.classList.add("move-log-entry");
-    this.movesLog.appendChild(div);
-    const moveNumber = Math.floor(this.movesLog.children.length / 2) + 1;
-    div.textContent =
-      (this.movesLog.children.length % 2 === 1 ? moveNumber + ". " : "") +
-      specialMovementToPgn(move, this.game.state);
+    this.historyBar!.addLogEntry(cloneChessBoardState(this.game.state), pgn);
+    this.clearSelection();
   }
 
   showPromotionOptions(
@@ -210,6 +213,21 @@ export default class ChessScreen implements Screen {
         this.pips.push(pip);
       }
     }
+  }
+
+  setHighlightedMoves(latestMove: TaggedMove): void {
+    this.highlightedTiles.forEach((tile) =>
+      tile.classList.remove("highlighted"),
+    );
+    this.highlightedTiles = [
+      this.boardDiv.firstChild?.childNodes[7 - latestMove.from.y].childNodes[
+        latestMove.from.x
+      ] as HTMLDivElement,
+      this.boardDiv.firstChild?.childNodes[7 - latestMove.to.y].childNodes[
+        latestMove.to.x
+      ] as HTMLDivElement,
+    ];
+    this.highlightedTiles.forEach((tile) => tile.classList.add("highlighted"));
   }
 
   deactivate(): void {}

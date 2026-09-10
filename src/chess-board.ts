@@ -103,7 +103,7 @@ function getPieceAt(state: ChessBoardState, tile: Tile): Piece | undefined {
   );
 }
 
-function cloneChessBoardState(state: ChessBoardState): ChessBoardState {
+export function cloneChessBoardState(state: ChessBoardState): ChessBoardState {
   return {
     ...state,
     pieces: state.pieces.map((i) => ({ ...i })),
