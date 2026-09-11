@@ -9,11 +9,10 @@ import {
   type TaggedMove,
 } from "./chess-board";
 import type { Tile } from "./chess-tile";
-import { type PieceImage } from "./images";
-import type { Behavior } from "./pieces/utils";
+import type { Behavior, LazyImage } from "./pieces/utils";
 
 export interface PieceType {
-  image: PieceImage;
+  image: LazyImage;
   canEnPassant?: boolean;
 
   behavior: Behavior;

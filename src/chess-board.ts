@@ -38,7 +38,7 @@ export function specialMovementToPgn(
   if (m.promotion) {
     promotion = "=" + m.promotion.piece.symbol.toLocaleUpperCase();
   }
-  return `${m.piece.type.symbol.toLocaleUpperCase()}${disamb}${m.type === "capture" ? "x" : ""}${tileToAlgebraic(m.to)}${promotion}`;
+  return `${m.piece.type === pieceTypes.pawn ? "" : m.piece.type.symbol.toLocaleUpperCase()}${disamb}${m.type === "capture" ? "x" : ""}${tileToAlgebraic(m.to)}${promotion}`;
 }
 
 export type Promotion =

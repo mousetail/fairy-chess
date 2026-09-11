@@ -1,4 +1,8 @@
 import type { ChessBoardState } from "./chess-board";
+import backIcon from "./assets/back.svg";
+import forwardIcon from "./assets/forward.svg";
+import toStartIcon from "./assets/to-start.svg";
+import toEndIcon from "./assets/to-end.svg";
 
 export class HistoryBar {
   private root: HTMLDivElement;
@@ -34,7 +38,9 @@ export class HistoryBar {
 
   private createMovesLogHeaderButtons(container: HTMLDivElement): void {
     const backToStartButton = document.createElement("button");
-    backToStartButton.textContent = "|<";
+    const img1 = document.createElement("img");
+    img1.src = toStartIcon;
+    backToStartButton.appendChild(img1);
     backToStartButton.classList.add("back-to-start-button");
     backToStartButton.addEventListener("click", () => {
       this.historyBackToStart();
@@ -42,7 +48,9 @@ export class HistoryBar {
     container.appendChild(backToStartButton);
 
     const backButton = document.createElement("button");
-    backButton.textContent = "<";
+    const img2 = document.createElement("img");
+    img2.src = backIcon;
+    backButton.appendChild(img2);
     backButton.classList.add("back-button");
     backButton.addEventListener("click", () => {
       this.historyBack();
@@ -50,7 +58,9 @@ export class HistoryBar {
     container.appendChild(backButton);
 
     const forwardButton = document.createElement("button");
-    forwardButton.textContent = ">";
+    const img3 = document.createElement("img");
+    img3.src = forwardIcon;
+    forwardButton.appendChild(img3);
     forwardButton.classList.add("forward-button");
     forwardButton.addEventListener("click", () => {
       this.historyForward();
@@ -58,7 +68,9 @@ export class HistoryBar {
     container.appendChild(forwardButton);
 
     const forwardToEndButton = document.createElement("button");
-    forwardToEndButton.textContent = ">|";
+    const img4 = document.createElement("img");
+    img4.src = toEndIcon;
+    forwardToEndButton.appendChild(img4);
     forwardToEndButton.classList.add("forward-to-end-button");
     forwardToEndButton.addEventListener("click", () => {
       this.historyForwardToEnd();
@@ -67,12 +79,16 @@ export class HistoryBar {
   }
 
   addLogEntry(state: ChessBoardState, pgn: string): void {
+    if (this.root.children.length % 3 === 0) {
+      const div2 = document.createElement("div");
+      div2.textContent = `${Math.floor(this.root.children.length / 3) + 1}. `;
+      this.root.appendChild(div2);
+    }
+
     const div = document.createElement("div");
     div.classList.add("move-log-entry");
     this.root.appendChild(div);
-    const moveNumber = Math.floor(this.root.children.length / 2) + 1;
-    div.textContent =
-      (this.root.children.length % 2 === 1 ? moveNumber + ". " : "") + pgn;
+    div.textContent = pgn;
     this.history.set(div, state);
     div.addEventListener("click", () => {
       this.onClickHistoryEntry(div);

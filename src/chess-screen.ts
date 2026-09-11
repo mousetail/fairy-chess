@@ -10,7 +10,28 @@ import {
 import { ChessGame } from "./chess-game";
 import type { Tile } from "./chess-tile";
 import { HistoryBar } from "./history-bar";
+import type { PieceImage } from "./images/images";
+import type { LazyImage } from "./pieces/utils";
 import type { Screen } from "./screen";
+
+function getImageFromPromise(
+  v: LazyImage,
+  color: "black" | "white",
+): HTMLImageElement {
+  if (v.state === "pending") {
+    const img = document.createElement("img");
+    v.promise().then((image: PieceImage) => {
+      img.src = image[color];
+
+      Object.assign(v, { state: "resolved" }, image);
+    });
+
+    return img;
+  }
+  const img = document.createElement("img");
+  img.src = v[color];
+  return img;
+}
 
 export default class ChessScreen implements Screen {
   game: ChessGame;
@@ -55,9 +76,8 @@ export default class ChessScreen implements Screen {
     }
     parent.appendChild(this.boardDiv);
     for (const piece of this.game.state.pieces) {
-      const image = document.createElement("img");
+      const image = getImageFromPromise(piece.type.image, piece.color);
       image.classList.add("board-piece");
-      image.src = piece.type.image[piece.color];
       this.piecesDivs.set(piece.id, image);
       this.boardDiv.appendChild(image);
 
@@ -147,8 +167,7 @@ export default class ChessScreen implements Screen {
       const button = document.createElement("button");
       button.classList.add("promotion-dialogue-button");
 
-      const image = document.createElement("img");
-      image.src = option.image[piece.color];
+      const image = getImageFromPromise(piece.type.image, piece.color);
       button.appendChild(image);
 
       button.addEventListener("click", () => {
@@ -166,9 +185,8 @@ export default class ChessScreen implements Screen {
   }
 
   addPiece(piece: Piece): void {
-    const image = document.createElement("img");
+    const image = getImageFromPromise(piece.type.image, piece.color);
     image.classList.add("board-piece");
-    image.src = piece.type.image[piece.color];
     this.piecesDivs.set(piece.id, image);
     this.boardDiv.appendChild(image);
     image.style.setProperty("--x", `${piece.position.x}`);
