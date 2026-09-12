@@ -15,6 +15,15 @@ import type { PieceImage } from "./images/images";
 import type { LazyImage } from "./pieces/utils";
 import type { Screen } from "./screen";
 
+const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
+// Length of the arrowhead, and half of its width at the base, in squares.
+const ARROW_HEAD_LENGTH = 0.55;
+const ARROW_HEAD_HALF_WIDTH = 0.32;
+
+function tileCenter(tile: Tile): { x: number; y: number } {
+  return { x: tile.x + 0.5, y: 7 - tile.y + 0.5 };
+}
+
 function getImageFromPromise(
   v: LazyImage,
   color: "black" | "white",
@@ -51,6 +60,11 @@ export default class ChessScreen implements Screen {
   scoreDisplay: HTMLDivElement;
   playAgainButton: HTMLButtonElement;
 
+  arrows: Map<string, { from: Tile; to: Tile }> = new Map();
+  arrowStart: Tile | null = null;
+  arrowPreviewEnd: { x: number; y: number } | null = null;
+  arrowsSvg: SVGSVGElement;
+
   constructor() {
     this.game = ChessGame.defaultLayout();
     this.boardDiv = document.createElement("div");
@@ -67,6 +81,10 @@ export default class ChessScreen implements Screen {
     this.playAgainButton.classList.add("play-again-button");
     this.playAgainButton.textContent = "Play again";
     this.scoreWidget.appendChild(this.playAgainButton);
+
+    this.arrowsSvg = document.createElementNS(SVG_NAMESPACE, "svg");
+    this.arrowsSvg.classList.add("arrows-layer");
+    this.arrowsSvg.setAttribute("viewBox", "0 0 8 8");
   }
 
   activate(parent: HTMLElement): void {
@@ -88,15 +106,27 @@ export default class ChessScreen implements Screen {
       for (let j = 0; j < 8; j++) {
         const cell = document.createElement("div");
         cell.classList.add("cell", (i + j) % 2 == 0 ? "even" : "odd");
+        cell.dataset.tileX = `${j}`;
+        cell.dataset.tileY = `${7 - i}`;
 
         cell.addEventListener("click", () => {
           this.clickTile({ x: j, y: 7 - i });
         });
+        cell.addEventListener("contextmenu", (event) =>
+          event.preventDefault(),
+        );
+        cell.addEventListener("mousedown", (event) =>
+          this.onArrowMouseDown(event),
+        );
 
         row.appendChild(cell);
       }
       boardDivInner.appendChild(row);
     }
+    this.boardDiv.appendChild(this.arrowsSvg);
+    this.boardDiv.addEventListener("contextmenu", (event) =>
+      event.preventDefault(),
+    );
     leftColumn.appendChild(this.boardDiv);
     for (const piece of this.game.state.pieces) {
       const image = getImageFromPromise(piece.type.image, piece.color);
@@ -136,10 +166,152 @@ export default class ChessScreen implements Screen {
     this.pips = [];
   }
 
-  /**
-   * Moves are only allowed while the present position is shown and the game
-   * has not finished.
-   */
+  tileFromEvent(event: MouseEvent): Tile | null {
+    const target = event.target as HTMLElement | null;
+    const cell = target?.closest?.(".cell") as HTMLElement | null;
+    if (!cell || cell.dataset.tileX === undefined) {
+      return null;
+    }
+    return { x: Number(cell.dataset.tileX), y: Number(cell.dataset.tileY) };
+  }
+
+  /** Converts a mouse event to a point in the SVG's coordinate space. */
+  boardPointFromEvent(event: MouseEvent): { x: number; y: number } {
+    const rect = this.boardDiv.getBoundingClientRect();
+    return {
+      x: ((event.clientX - rect.left) / rect.width) * 8,
+      y: ((event.clientY - rect.top) / rect.height) * 8,
+    };
+  }
+
+  onArrowMouseDown(event: MouseEvent): void {
+    if (event.button !== 2) return;
+    const tile = this.tileFromEvent(event);
+    if (!tile) return;
+
+    event.preventDefault();
+    this.arrowStart = tile;
+    this.arrowPreviewEnd = tileCenter(tile);
+    this.renderArrows();
+
+    window.addEventListener("mousemove", this.onArrowMouseMove);
+    window.addEventListener("mouseup", this.onArrowMouseUp);
+  }
+
+  onArrowMouseMove = (event: MouseEvent): void => {
+    if (this.arrowStart === null) return;
+    // Snap the preview to the hovered square, falling back to the raw pointer
+    // position when it is outside any square.
+    const tile = this.tileFromEvent(event);
+    this.arrowPreviewEnd = tile
+      ? tileCenter(tile)
+      : this.boardPointFromEvent(event);
+    this.renderArrows();
+  };
+
+  onArrowMouseUp = (event: MouseEvent): void => {
+    if (event.button !== 2) return;
+    window.removeEventListener("mousemove", this.onArrowMouseMove);
+    window.removeEventListener("mouseup", this.onArrowMouseUp);
+
+    const start = this.arrowStart;
+    const target = this.tileFromEvent(event);
+    this.arrowStart = null;
+    this.arrowPreviewEnd = null;
+
+    if (start && target) {
+      const key = `${start.x},${start.y}->${target.x},${target.y}`;
+      if (this.arrows.has(key)) {
+        this.arrows.delete(key);
+      } else {
+        this.arrows.set(key, { from: start, to: target });
+      }
+    }
+    this.renderArrows();
+  };
+
+  clearArrows(): void {
+    this.arrows.clear();
+    this.arrowStart = null;
+    this.arrowPreviewEnd = null;
+    this.renderArrows();
+  }
+
+  renderArrows(): void {
+    this.arrowsSvg.replaceChildren();
+    for (const { from, to } of this.arrows.values()) {
+      this.arrowsSvg.appendChild(
+        this.createArrowElement(tileCenter(from), tileCenter(to), false),
+      );
+    }
+    if (this.arrowStart !== null && this.arrowPreviewEnd !== null) {
+      this.arrowsSvg.appendChild(
+        this.createArrowElement(
+          tileCenter(this.arrowStart),
+          this.arrowPreviewEnd,
+          true,
+        ),
+      );
+    }
+  }
+
+  createArrowElement(
+    from: { x: number; y: number },
+    to: { x: number; y: number },
+    preview: boolean,
+  ): SVGElement {
+    // A square drawn onto itself is shown as a circle instead of an arrow.
+    if (from.x === to.x && from.y === to.y) {
+      const circle = document.createElementNS(SVG_NAMESPACE, "circle");
+      circle.setAttribute("cx", `${from.x}`);
+      circle.setAttribute("cy", `${from.y}`);
+      circle.setAttribute("r", "0.4");
+      circle.classList.add("arrow-circle");
+      if (preview) circle.classList.add("arrow-preview");
+      return circle;
+    }
+
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const length = Math.hypot(dx, dy);
+    const ux = dx / length;
+    const uy = dy / length;
+    // Unit vector perpendicular to the arrow, used for the head's base.
+    const px = -uy;
+    const py = ux;
+    // Start the tail near the origin square's center.
+    const startPad = 0.05;
+    // The head's tip sits on the target square's center; the line stops at the
+    // head's base so it never pokes out past the tip.
+    const baseX = to.x - ux * ARROW_HEAD_LENGTH;
+    const baseY = to.y - uy * ARROW_HEAD_LENGTH;
+
+    const line = document.createElementNS(SVG_NAMESPACE, "line");
+    line.setAttribute("x1", `${from.x + ux * startPad}`);
+    line.setAttribute("y1", `${from.y + uy * startPad}`);
+    line.setAttribute("x2", `${baseX + ux * 0.02}`);
+    line.setAttribute("y2", `${baseY + uy * 0.02}`);
+    line.classList.add("arrow-line");
+    if (preview) line.classList.add("arrow-preview");
+
+    const head = document.createElementNS(SVG_NAMESPACE, "polygon");
+    head.setAttribute(
+      "points",
+      [
+        `${to.x},${to.y}`,
+        `${baseX + px * ARROW_HEAD_HALF_WIDTH},${baseY + py * ARROW_HEAD_HALF_WIDTH}`,
+        `${baseX - px * ARROW_HEAD_HALF_WIDTH},${baseY - py * ARROW_HEAD_HALF_WIDTH}`,
+      ].join(" "),
+    );
+    head.classList.add("arrow-head");
+    if (preview) head.classList.add("arrow-preview");
+
+    const group = document.createElementNS(SVG_NAMESPACE, "g");
+    group.appendChild(line);
+    group.appendChild(head);
+    return group;
+  }
+
   canInteract(): boolean {
     return !this.gameEnded && this.historyBar?.isAtPresent() === true;
   }
@@ -197,6 +369,7 @@ export default class ChessScreen implements Screen {
     this.setHighlightedMoves(taggedMove);
 
     this.historyBar!.addLogEntry(cloneChessBoardState(this.game.state), pgn);
+    this.clearArrows();
     this.clearSelection();
   }
 

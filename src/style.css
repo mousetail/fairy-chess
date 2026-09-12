@@ -13,7 +13,8 @@ body {
   --dark-square-color: #7EE081;
   --light-square-color: #C3F3C0;
   --highlighted-square-color: #62A87C;
-  --pip-color: #313B72
+  --pip-color: #313B72;
+  --arrow-color: #FF8C42;
 }
 
 .row {
@@ -65,6 +66,41 @@ body {
     border-radius: 2rem;
     background: radial-gradient(circle at center, red, red 15%,transparent 75%);
     z-index: 1;
+  }
+
+  & .arrows-layer {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 32rem;
+    height: 32rem;
+    overflow: visible;
+    pointer-events: none;
+    z-index: 3;
+
+    & .arrow-line {
+      stroke: var(--arrow-color);
+      stroke-width: 0.2;
+      stroke-linecap: butt;
+      fill: none;
+      opacity: 0.7;
+    }
+
+    & .arrow-circle {
+      stroke: var(--arrow-color);
+      stroke-width: 0.2;
+      fill: none;
+      opacity: 0.7;
+    }
+
+    & .arrow-head {
+      fill: var(--arrow-color);
+      opacity: 0.7;
+    }
+
+    & .arrow-preview {
+      opacity: 0.5;
+    }
   }
 }
 
