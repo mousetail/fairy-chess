@@ -1,4 +1,4 @@
-import ChessScreen from "./chess-screen";
+import ChessScreen from "./chess-screen/index";
 import type { Screen } from "./screen";
 
 export class HomeScreen implements Screen {
