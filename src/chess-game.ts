@@ -28,6 +28,8 @@ type Player =
       difficulty: number;
     };
 
+export type GameStatus = "checkmate" | "stalemate";
+
 export class ChessGame {
   state: ChessBoardState;
   players: {
@@ -71,6 +73,12 @@ export class ChessGame {
     });
   }
 
+  hasLegalMoves(color: "black" | "white"): boolean {
+    return this.state.pieces
+      .filter((piece) => piece.color === color)
+      .some((piece) => this.getValidMoves(piece).length > 0);
+  }
+
   /**
    * Does not check the validity of the move.
    * @param piece
@@ -84,10 +92,17 @@ export class ChessGame {
     destroyPiece: (piece: number) => void,
     addPiece: (piece: Piece) => void,
     setInCheck: (color: "black" | "white", isInCheck: boolean) => void,
+    onGameEnd: (status: GameStatus, color: "black" | "white") => void,
   ): void {
     applyMove(this.state, move, movePiece, destroyPiece, addPiece);
 
-    setInCheck(this.state.turn, isInCheck(this.state.turn, this.state))
+    const color = this.state.turn;
+    const inCheck = isInCheck(color, this.state);
+    setInCheck(color, inCheck);
+
+    if (!this.hasLegalMoves(color)) {
+      onGameEnd(inCheck ? "checkmate" : "stalemate", color);
+    }
   }
 
   static defaultLayout(): ChessGame {

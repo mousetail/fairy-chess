@@ -8,7 +8,7 @@ import {
   type SpecialMovement,
   type TaggedMove,
 } from "./chess-board";
-import { ChessGame } from "./chess-game";
+import { ChessGame, type GameStatus } from "./chess-game";
 import type { Tile } from "./chess-tile";
 import { HistoryBar } from "./history-bar";
 import type { PieceImage } from "./images/images";
@@ -44,8 +44,12 @@ export default class ChessScreen implements Screen {
 
   selectedPiece: { piece: Piece; moves: SpecialMovement[] } | null = null;
   handlingPromotion: boolean = false;
+  gameEnded: boolean = false;
   highlightedTiles: HTMLDivElement[] = [];
   checkMarker: HTMLDivElement;
+  scoreWidget: HTMLDivElement;
+  scoreDisplay: HTMLDivElement;
+  playAgainButton: HTMLButtonElement;
 
   constructor() {
     this.game = ChessGame.defaultLayout();
@@ -53,6 +57,16 @@ export default class ChessScreen implements Screen {
     this.movesLog = document.createElement("div");
     this.checkMarker = document.createElement("div");
     this.checkMarker.classList.add("check-marker");
+
+    this.scoreWidget = document.createElement("div");
+    this.scoreWidget.classList.add("score-widget", "hidden");
+    this.scoreDisplay = document.createElement("div");
+    this.scoreDisplay.classList.add("score");
+    this.scoreWidget.appendChild(this.scoreDisplay);
+    this.playAgainButton = document.createElement("button");
+    this.playAgainButton.classList.add("play-again-button");
+    this.playAgainButton.textContent = "Play again";
+    this.scoreWidget.appendChild(this.playAgainButton);
   }
 
   activate(parent: HTMLElement): void {
@@ -94,7 +108,17 @@ export default class ChessScreen implements Screen {
       image.style.setProperty("--y", `${piece.position.y}`);
     }
 
-    this.historyBar = new HistoryBar(parent, (state) => {
+    const sidebar = document.createElement("div");
+    sidebar.classList.add("sidebar");
+    parent.appendChild(sidebar);
+    sidebar.appendChild(this.scoreWidget);
+    this.playAgainButton.addEventListener("click", () => {
+      this.deactivate();
+      new ChessScreen().activate(parent);
+    });
+
+    this.historyBar = new HistoryBar(sidebar, (state) => {
+      this.clearSelection();
       this.piecesDivs.forEach((i) => i.remove());
       this.piecesDivs.clear();
       for (const piece of state.pieces) {
@@ -112,8 +136,17 @@ export default class ChessScreen implements Screen {
     this.pips = [];
   }
 
+  /**
+   * Moves are only allowed while the present position is shown and the game
+   * has not finished.
+   */
+  canInteract(): boolean {
+    return !this.gameEnded && this.historyBar?.isAtPresent() === true;
+  }
+
   clickTile(tile: Tile): void {
     if (this.handlingPromotion) return;
+    if (!this.canInteract()) return;
 
     const piece = this.game.getPieceAt(tile);
     if (
@@ -149,6 +182,8 @@ export default class ChessScreen implements Screen {
     move: SpecialMovement &
       ({ promotion: undefined } | { promotion: { state: "resolved" } }),
   ): void {
+    if (!this.canInteract()) return;
+
     const taggedMove = { ...move, from: piece.position, piece };
     const pgn = specialMovementToPgn(taggedMove, this.game.state);
     this.game.movePiece(
@@ -156,7 +191,8 @@ export default class ChessScreen implements Screen {
       this.movePiece.bind(this),
       this.destroyPiece.bind(this),
       this.addPiece.bind(this),
-      this.setInCheck.bind(this)
+      this.setInCheck.bind(this),
+      this.setGameEnd.bind(this)
     );
     this.setHighlightedMoves(taggedMove);
 
@@ -207,6 +243,17 @@ export default class ChessScreen implements Screen {
       this.boardDiv.appendChild(this.checkMarker);
     } else {
       this.checkMarker.remove();
+    }
+  }
+
+  setGameEnd(status: GameStatus, color: "black" | "white"): void {
+    this.gameEnded = true;
+    this.clearSelection();
+    this.scoreWidget.classList.remove("hidden");
+    if (status === "stalemate") {
+      this.scoreDisplay.textContent = "½-½";
+    } else {
+      this.scoreDisplay.textContent = color === "white" ? "0-1" : "1-0";
     }
   }
 

@@ -108,6 +108,10 @@ export class HistoryBar {
     }
   }
 
+  isAtPresent(): boolean {
+    return this.viewingHistory === this.latestLogEntry;
+  }
+
   onClickHistoryEntry(entry: HTMLDivElement): void {
     if (this.viewingHistory) {
       this.viewingHistory.classList.remove("active");

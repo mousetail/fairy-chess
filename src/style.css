@@ -120,15 +120,54 @@ body {
   }
 }
 
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-left: 0.5rem;
+}
+
+.score-widget {
+  display: flex;
+  flex-direction: column;
+  border: 2px solid black;
+  background-color: var(--light-square-color);
+  color: black;
+}
+
+.score-widget.hidden {
+  display: none;
+}
+
+.score {
+  min-height: 1.2rem;
+  padding: 0.5rem;
+  text-align: center;
+  font-size: 1.2rem;
+}
+
+.play-again-button {
+  border: none;
+  border-top: 2px solid black;
+  background: white;
+  padding: 0.5rem;
+  font-size: 1rem;
+  cursor: pointer;
+
+  &:hover {
+    background-color: var(--highlighted-square-color);
+  }
+}
+
 #app {
   display: flex;
   justify-content: center;
 }
 
 .moves-log-container {
-  margin-left: 0.5rem;
   display: flex;
   flex-direction: column;
+  flex-grow: 1;
   background-color: var(--light-square-color);
   color: black;
 }

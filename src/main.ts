@@ -1,4 +1,3 @@
-import ChessScreen from "./chess-screen";
 import { HomeScreen } from "./home-screen";
 
 const app = document.getElementById("app")!;
