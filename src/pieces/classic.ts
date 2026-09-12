@@ -1,6 +1,5 @@
 import { pieceTypes, type ChessBoardState, type Piece } from "../chess-board";
 import { type PieceType } from "../chess-game";
-import images from "../images/images";
 import {
   jumpBehavior,
   moveBehavior,

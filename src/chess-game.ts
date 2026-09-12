@@ -83,8 +83,11 @@ export class ChessGame {
     movePiece: (piece: number, tile: Tile) => void,
     destroyPiece: (piece: number) => void,
     addPiece: (piece: Piece) => void,
+    setInCheck: (color: "black" | "white", isInCheck: boolean) => void,
   ): void {
     applyMove(this.state, move, movePiece, destroyPiece, addPiece);
+
+    setInCheck(this.state.turn, isInCheck(this.state.turn, this.state))
   }
 
   static defaultLayout(): ChessGame {

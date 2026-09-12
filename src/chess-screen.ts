@@ -2,6 +2,7 @@ import {
   cloneChessBoardState,
   movementHasNoPendingPromotion,
   movementHasPendingPromotion,
+  pieceTypes,
   specialMovementToPgn,
   type Piece,
   type SpecialMovement,
@@ -44,15 +45,23 @@ export default class ChessScreen implements Screen {
   selectedPiece: { piece: Piece; moves: SpecialMovement[] } | null = null;
   handlingPromotion: boolean = false;
   highlightedTiles: HTMLDivElement[] = [];
+  checkMarker: HTMLDivElement;
 
   constructor() {
     this.game = ChessGame.defaultLayout();
     this.boardDiv = document.createElement("div");
     this.movesLog = document.createElement("div");
+    this.checkMarker = document.createElement("div");
+    this.checkMarker.classList.add("check-marker");
   }
 
   activate(parent: HTMLElement): void {
     parent.replaceChildren();
+
+    const leftColumn = document.createElement("div");
+    leftColumn.classList.add("left-column");
+    parent.appendChild(leftColumn);
+
 
     this.boardDiv = document.createElement("div");
     this.boardDiv.classList.add("board-outer");
@@ -74,7 +83,7 @@ export default class ChessScreen implements Screen {
       }
       boardDivInner.appendChild(row);
     }
-    parent.appendChild(this.boardDiv);
+    leftColumn.appendChild(this.boardDiv);
     for (const piece of this.game.state.pieces) {
       const image = getImageFromPromise(piece.type.image, piece.color);
       image.classList.add("board-piece");
@@ -147,6 +156,7 @@ export default class ChessScreen implements Screen {
       this.movePiece.bind(this),
       this.destroyPiece.bind(this),
       this.addPiece.bind(this),
+      this.setInCheck.bind(this)
     );
     this.setHighlightedMoves(taggedMove);
 
@@ -167,7 +177,7 @@ export default class ChessScreen implements Screen {
       const button = document.createElement("button");
       button.classList.add("promotion-dialogue-button");
 
-      const image = getImageFromPromise(piece.type.image, piece.color);
+      const image = getImageFromPromise(option.image, piece.color);
       button.appendChild(image);
 
       button.addEventListener("click", () => {
@@ -182,6 +192,22 @@ export default class ChessScreen implements Screen {
     }
 
     this.boardDiv.appendChild(dialogue);
+  }
+
+  setInCheck(color: "black" | "white", isInCheck: boolean): void {
+    if (isInCheck) {
+      const king = this.game.state.pieces.find(i => i.type === pieceTypes.king && i.color === color);
+      if (!king) {
+        this.checkMarker.remove();
+        return;
+      };
+
+      this.checkMarker.style.setProperty("--x", `${king.position.x}`);
+      this.checkMarker.style.setProperty("--y", `${king.position.y}`);
+      this.boardDiv.appendChild(this.checkMarker);
+    } else {
+      this.checkMarker.remove();
+    }
   }
 
   addPiece(piece: Piece): void {

@@ -88,6 +88,7 @@ export class HistoryBar {
     const div = document.createElement("div");
     div.classList.add("move-log-entry");
     this.root.appendChild(div);
+    this.root.scrollTop = this.root.scrollHeight;
     div.textContent = pgn;
     this.history.set(div, state);
     div.addEventListener("click", () => {
