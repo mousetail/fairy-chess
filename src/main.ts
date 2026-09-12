@@ -1,6 +1,7 @@
 import ChessScreen from "./chess-screen";
+import { HomeScreen } from "./home-screen";
 
 const app = document.getElementById("app")!;
 
-const screen = new ChessScreen();
+const screen = new HomeScreen();
 screen.activate(app);
