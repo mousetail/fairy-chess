@@ -36,12 +36,15 @@ export class FairyStockfishEngine {
     }
 
     if (message.type === "error") {
-      this.failure = new Error(message.message ?? "Fairy Stockfish failed to start");
+      this.failure = new Error(
+        message.message ?? "Fairy Stockfish failed to start",
+      );
       for (const waiter of [...this.waiters]) {
         this.waiters.delete(waiter);
         waiter.reject(this.failure);
       }
-      for (const listener of [...this.errorListeners]) listener(this.failure.message);
+      for (const listener of [...this.errorListeners])
+        listener(this.failure.message);
     }
   }
 

@@ -7,8 +7,29 @@ interface RadioGroup {
   getValue(): string | null;
 }
 
+interface SliderGroup {
+  element: HTMLLabelElement;
+  getValue(): string;
+}
+
+/** The selections made on the home screen, used to restore them on a rematch. */
+export interface HomeScreenSettings {
+  mode: string;
+  minTurnTime: string;
+  difficulty: string;
+  chaosLevel: string;
+}
+
 export class HomeScreen implements Screen {
+  private readonly initialSettings?: HomeScreenSettings;
+
+  constructor(initialSettings?: HomeScreenSettings) {
+    this.initialSettings = initialSettings;
+  }
+
   activate(parent: HTMLElement) {
+    parent.replaceChildren();
+
     const container = document.createElement("div");
     parent.appendChild(container);
 
@@ -20,11 +41,13 @@ export class HomeScreen implements Screen {
     modeSubHeader.textContent = "Mode Preference";
     container.appendChild(modeSubHeader);
 
-    const modeRadio = this.createRadio('mode', [
-      'Local',
-      'Online',
-      'vs AI'
-    ]);
+    const modeOptions = ["Local", "Online", "vs AI"];
+    const modeRadio = this.createRadio(
+      "mode",
+      modeOptions,
+      this.indexOfOption(modeOptions, this.initialSettings?.mode),
+    );
+    modeRadio.element.classList.add("button-radio");
     container.appendChild(modeRadio.element);
 
     const aiOptions = document.createElement("div");
@@ -36,87 +59,126 @@ export class HomeScreen implements Screen {
     aiOptions.appendChild(aiSubHeader);
 
     aiOptions.appendChild(
-      this.createRadio('ai engine', ['Fairy Stockfish']).element
+      this.createRadio("ai engine", ["Fairy Stockfish"]).element,
     );
 
     const minTurnTimeLabel = document.createElement("label");
     minTurnTimeLabel.classList.add("min-turn-time");
     minTurnTimeLabel.appendChild(
-      document.createTextNode("Minimum turn time (seconds): ")
+      document.createTextNode("Minimum turn time (seconds): "),
     );
     const minTurnTimeInput = document.createElement("input");
     minTurnTimeInput.type = "number";
     minTurnTimeInput.min = "0";
     minTurnTimeInput.step = "0.5";
-    minTurnTimeInput.value = "1";
+    minTurnTimeInput.value = this.initialSettings?.minTurnTime ?? "1";
     minTurnTimeLabel.appendChild(minTurnTimeInput);
     aiOptions.appendChild(minTurnTimeLabel);
 
-    const difficultyLabel = document.createElement("label");
-    difficultyLabel.classList.add("difficulty");
-    difficultyLabel.appendChild(document.createTextNode("Difficulty (0-5): "));
-    const difficultySelect = document.createElement("select");
-    for (let level = 0; level <= 5; level++) {
-      const option = document.createElement("option");
-      option.value = String(level);
-      option.textContent = String(level);
-      difficultySelect.appendChild(option);
-    }
-    difficultySelect.value = "5";
-    difficultyLabel.appendChild(difficultySelect);
-    aiOptions.appendChild(difficultyLabel);
+    const difficultyOptions = ["0", "1", "2", "3", "4", "5"];
+    const difficultySlider = this.createSlider(
+      "Difficulty",
+      difficultyOptions,
+      this.sliderIndex(
+        this.initialSettings?.difficulty,
+        difficultyOptions.length,
+        3,
+      ),
+    );
+    difficultySlider.element.classList.add("difficulty");
+    aiOptions.appendChild(difficultySlider.element);
 
     container.appendChild(aiOptions);
 
-    modeRadio.element.addEventListener("change", () => {
-      aiOptions.hidden = modeRadio.getValue() !== 'vs AI';
-    });
+    const updateAiOptionsVisibility = () => {
+      aiOptions.hidden = modeRadio.getValue() !== "vs AI";
+    };
+    updateAiOptionsVisibility();
+    modeRadio.element.addEventListener("change", updateAiOptionsVisibility);
 
     const chaosLevelSubHeader = document.createElement("h2");
     chaosLevelSubHeader.textContent = "Chaos Level Preference";
     container.appendChild(chaosLevelSubHeader);
 
-    container.appendChild(
-      this.createRadio(
-        'chaos level',
-        ['normal chess',
-          'one fairy piece',
-          'several fairy pieces',
-          'full random symetric',
-          'full random asymetric']
-      ).element
-    )
+    const chaosOptions = [
+      "normal chess",
+      "one fairy piece",
+      "several fairy pieces",
+      "full random symetric",
+      "full random asymetric",
+    ];
+    const chaosLevelSlider = this.createSlider(
+      "Chaos Level",
+      chaosOptions,
+      this.sliderIndex(
+        this.initialSettings?.chaosLevel,
+        chaosOptions.length,
+        0,
+      ),
+    );
+    container.appendChild(chaosLevelSlider.element);
 
     const playButton = document.createElement("button");
     playButton.textContent = "Play";
-    playButton.classList.add('play-button')
+    playButton.classList.add("play-button");
     container.appendChild(playButton);
 
     playButton.addEventListener("click", () => {
+      const settings: HomeScreenSettings = {
+        mode: modeRadio.getValue() ?? modeOptions[0],
+        minTurnTime: minTurnTimeInput.value,
+        difficulty: difficultySlider.getValue(),
+        chaosLevel: chaosLevelSlider.getValue(),
+      };
       const options = this.buildOptions(
-        modeRadio.getValue(),
+        settings.mode,
         minTurnTimeInput,
-        difficultySelect,
+        difficultySlider.getValue(),
       );
+      options.onPlayAgain = () => new HomeScreen(settings).activate(parent);
       this.deactivate();
       new ChessScreen(options).activate(parent);
     });
   }
 
+  /** Returns the index of `value` in `options`, falling back to `fallback`. */
+  private indexOfOption(
+    options: string[],
+    value: string | undefined,
+    fallback: number = 0,
+  ): number {
+    if (value === undefined) return fallback;
+    const index = options.indexOf(value);
+    return index === -1 ? fallback : index;
+  }
+
+  /** Parses a slider index, clamping it to `0..count - 1`. */
+  private sliderIndex(
+    value: string | undefined,
+    count: number,
+    fallback: number,
+  ): number {
+    if (value === undefined) return fallback;
+    const parsed = Number.parseInt(value, 10);
+    if (!Number.isFinite(parsed)) return fallback;
+    return Math.min(count - 1, Math.max(0, parsed));
+  }
+
   private buildOptions(
     mode: string | null,
     minTurnTimeInput: HTMLInputElement,
-    difficultySelect: HTMLSelectElement,
+    difficultyValue: string,
   ): ChessScreenOptions {
-    if (mode !== 'vs AI') return {};
+    if (mode !== "vs AI") return {};
 
     const seconds = Number.parseFloat(minTurnTimeInput.value);
-    const minTurnTimeMs = Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : 0;
+    const minTurnTimeMs =
+      Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : 0;
 
-    const parsedDifficulty = Number.parseInt(difficultySelect.value, 10);
+    const parsedDifficulty = Number.parseInt(difficultyValue, 10);
     const difficulty = Number.isFinite(parsedDifficulty)
       ? Math.min(5, Math.max(0, parsedDifficulty))
-      : 5;
+      : 3;
 
     const opponent: Player = {
       type: "ai",
@@ -127,21 +189,56 @@ export class HomeScreen implements Screen {
     return { black: opponent };
   }
 
-  createRadio(name: string, options: string[]): RadioGroup {
+  createSlider(
+    name: string,
+    options: string[],
+    defaultIndex: number,
+  ): SliderGroup {
+    const label = document.createElement("label");
+    label.classList.add("slider");
+    label.appendChild(document.createTextNode(`${name}: `));
+
+    const input = document.createElement("input");
+    input.type = "range";
+    input.min = "0";
+    input.max = String(options.length - 1);
+    input.step = "1";
+    input.value = String(defaultIndex);
+
+    const valueDisplay = document.createElement("span");
+    valueDisplay.classList.add("slider-value");
+    valueDisplay.textContent = options[defaultIndex];
+    const maxLabelLength = Math.max(...options.map((option) => option.length));
+    valueDisplay.style.minWidth = `${maxLabelLength}ch`;
+
+    input.addEventListener("input", () => {
+      valueDisplay.textContent = options[Number(input.value)];
+    });
+
+    label.appendChild(input);
+    label.appendChild(valueDisplay);
+
+    return {
+      element: label,
+      getValue: () => input.value,
+    };
+  }
+
+  createRadio(name: string, options: string[], defaultIndex = 0): RadioGroup {
     const radioGroup = document.createElement("div");
     radioGroup.classList.add("radio-group");
     for (const [index, option] of options.entries()) {
-      const id = `${name.replace(/\s+/g, '-')}-${index}`;
+      const id = `${name.replace(/\s+/g, "-")}-${index}`;
       const radio = document.createElement("input");
       radio.type = "radio";
       radio.name = name;
       radio.value = option;
       radio.id = id;
-      radio.checked = index === 0;
+      radio.checked = index === defaultIndex;
       const label = document.createElement("label");
       label.htmlFor = id;
       label.appendChild(radio);
-      label.appendChild(document.createTextNode(option))
+      label.appendChild(document.createTextNode(option));
       radioGroup.appendChild(label);
     }
 
@@ -156,7 +253,5 @@ export class HomeScreen implements Screen {
     };
   }
 
-  deactivate() {
-
-  }
+  deactivate() {}
 }

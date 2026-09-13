@@ -10,11 +10,11 @@ body {
   background-color: #462255;
   color: white;
 
-  --dark-square-color: #7EE081;
-  --light-square-color: #C3F3C0;
-  --highlighted-square-color: #62A87C;
-  --pip-color: #313B72;
-  --arrow-color: #FF8C42;
+  --dark-square-color: #7ee081;
+  --light-square-color: #c3f3c0;
+  --highlighted-square-color: #62a87c;
+  --pip-color: #313b72;
+  --arrow-color: #ff8c42;
 }
 
 .row {
@@ -51,6 +51,11 @@ body {
       z-index: 4;
       cursor: grabbing;
     }
+
+    &.checkmated {
+      transform: translate(calc(var(--x) * 4rem), calc((7 - var(--y)) * 4rem))
+        rotate(90deg);
+    }
   }
 
   & .pip {
@@ -67,14 +72,19 @@ body {
   & .border {
     width: 4rem;
     height: 4rem;
-    background: center / contain no-repeat url('./assets/corners.svg');
+    background: center / contain no-repeat url("./assets/corners.svg");
   }
 
   & .check-marker {
     width: 4rem;
     height: 4rem;
     border-radius: 2rem;
-    background: radial-gradient(circle at center, red, red 15%,transparent 75%);
+    background: radial-gradient(
+      circle at center,
+      red,
+      red 15%,
+      transparent 75%
+    );
     z-index: 1;
   }
 
@@ -159,8 +169,8 @@ body {
     cursor: pointer;
 
     & img {
-        width: 3rem;
-        height: 3rem;
+      width: 3rem;
+      height: 3rem;
     }
 
     &:hover {
@@ -276,67 +286,144 @@ body {
 }
 
 label {
-    display: block;
+  display: block;
 
-    & input {
-        margin-right: 0.5rem;
-    }
+  & input {
+    margin-right: 0.5rem;
+  }
 }
 
 button.play-button {
-    width: 100%;
-    background: white;
-    border: 2px solid black;
-    padding: 1rem;
-    margin-top: 1rem;
-    font-size: 1.2rem;
+  width: 100%;
+  background: white;
+  border: 2px solid black;
+  padding: 1rem;
+  margin-top: 1rem;
+  font-size: 1.2rem;
 
-    &:hover {
-        background-color: #88cfcf;
-    }
+  &:hover {
+    background-color: #88cfcf;
+  }
 }
 
 .ai-options {
-    border: 2px solid black;
-    padding: 0.75rem;
-    margin-top: 0.5rem;
+  border: 2px solid black;
+  padding: 0.75rem;
+  margin-top: 0.5rem;
+  background-color: var(--light-square-color);
+  color: black;
 
-    &[hidden] {
-        display: none;
-    }
+  &[hidden] {
+    display: none;
+  }
 
-    & h2 {
-        font-size: 1.2rem;
-        margin-bottom: 0.5rem;
-    }
+  & h2 {
+    font-size: 1.2rem;
+    margin-bottom: 0.5rem;
+  }
 }
 
 .min-turn-time input {
-    width: 5rem;
+  width: 5rem;
 }
 
-.difficulty select {
-    width: 4rem;
+.difficulty input[type="range"] {
+  width: 8rem;
+}
+
+.slider {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+
+  & input[type="range"] {
+    flex-grow: 1;
+  }
+
+  & .slider-value {
+    display: inline-block;
+    text-align: center;
+    min-width: 3rem;
+  }
+}
+
+.radio-group.button-radio {
+  display: flex;
+  gap: 0.5rem;
+
+  & label {
+    flex: 1;
+    display: block;
+    text-align: center;
+    padding: 0.5rem;
+    border: 2px solid black;
+    background: white;
+    color: black;
+    cursor: pointer;
+
+    & input {
+      display: none;
+    }
+
+    &:hover {
+      background-color: var(--light-square-color);
+    }
+  }
+
+  & label:has(input:checked) {
+    background-color: var(--highlighted-square-color);
+
+    &:hover {
+      background-color: var(--light-square-color);
+    }
+  }
 }
 
 .player-bar {
-    width: 32rem;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0.4rem 0;
-    font-size: 1.1rem;
-    font-weight: bold;
+  width: 32rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.4rem 0;
+  font-size: 1.1rem;
+  font-weight: bold;
+}
+
+.player-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.player-advantage {
+  display: flex;
+  align-items: center;
+  gap: 0.05rem;
+  min-height: 1.2rem;
+  font-size: 0.9rem;
+  font-weight: normal;
+}
+
+.advantage-piece {
+  width: 1.2rem;
+  height: 1.2rem;
+  object-fit: contain;
+  /* Rendered on the dark player bar, where the raw piece art would vanish. */
+  filter: invert(100%);
+}
+
+.advantage-value {
+  margin-left: 0.3rem;
 }
 
 .player-clock {
-    min-width: 4.5rem;
-    padding: 0.1rem 0.4rem;
-    text-align: center;
-    border-radius: 0.2rem;
+  min-width: 4.5rem;
+  padding: 0.1rem 0.4rem;
+  text-align: center;
+  border-radius: 0.2rem;
 
-    &.active {
-        background-color: var(--highlighted-square-color);
-        color: black;
-    }
+  &.active {
+    background-color: var(--highlighted-square-color);
+    color: black;
+  }
 }

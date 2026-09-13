@@ -103,8 +103,14 @@ export function resolveUciMove(game: ChessGame, uci: string): ResolvedMove {
     throw new Error(`Unsupported engine move: ${uci}`);
   }
 
-  const from = { x: FILES.indexOf(match[1].toLowerCase()), y: Number(match[2]) - 1 };
-  const to = { x: FILES.indexOf(match[3].toLowerCase()), y: Number(match[4]) - 1 };
+  const from = {
+    x: FILES.indexOf(match[1].toLowerCase()),
+    y: Number(match[2]) - 1,
+  };
+  const to = {
+    x: FILES.indexOf(match[3].toLowerCase()),
+    y: Number(match[4]) - 1,
+  };
   const promotionSymbol = match[5]?.toLowerCase() ?? "q";
 
   const piece = game.getPieceAt(from);
@@ -126,7 +132,10 @@ export function resolveUciMove(game: ChessGame, uci: string): ResolvedMove {
       ) ?? move.promotion.options[0];
     return {
       piece,
-      move: { ...move, promotion: { state: "resolved", piece: promotionPiece } },
+      move: {
+        ...move,
+        promotion: { state: "resolved", piece: promotionPiece },
+      },
     };
   }
 

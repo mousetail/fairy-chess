@@ -9,10 +9,19 @@ export interface AiSettings {
   difficulty: number;
 }
 
-/** Maps the 0-5 UI difficulty onto Fairy Stockfish's `Skill Level` (-20..20). */
+/** Maps the 0-5 UI difficulty onto Fairy Stockfish's `Skill Level` (-20..20).
+ *
+ * The weakest setting (0) matches the skill that old difficulty level 2 used to
+ * have (-4); the remaining levels are spread evenly up to the maximum (20),
+ * which level 5 keeps.
+ */
 export function skillLevelForDifficulty(difficulty: number): number {
   const clamped = Math.min(5, Math.max(0, difficulty));
-  return Math.round((clamped / 5) * 40) - 20;
+  const weakestSkill = -4;
+  const strongestSkill = 20;
+  return Math.round(
+    weakestSkill + (clamped / 5) * (strongestSkill - weakestSkill),
+  );
 }
 
 /** Plays a single colour using a Fairy Stockfish engine running in a web worker. */
@@ -34,7 +43,10 @@ export class AiPlayer {
     this.engine.onError(listener);
   }
 
-  async chooseMove(game: ChessGame, fullMoveNumber: number): Promise<ResolvedMove> {
+  async chooseMove(
+    game: ChessGame,
+    fullMoveNumber: number,
+  ): Promise<ResolvedMove> {
     if (!this.configured) {
       this.configured = true;
       await this.engine.setOption(

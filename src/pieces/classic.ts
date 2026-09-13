@@ -13,10 +13,12 @@ const classicPieces = {
     symbol: "p",
     image: getPieceImageAsync("classic", "pawn"),
     behavior: normalizeColor(pawnBehavior),
+    value: 1,
   },
   rook: {
     symbol: "r",
     image: getPieceImageAsync("classic", "rook"),
+    value: 5,
     behavior: moveBehavior([
       { x: -1, y: 0 },
       { x: 1, y: 0 },
@@ -27,6 +29,7 @@ const classicPieces = {
   knight: {
     symbol: "n",
     image: getPieceImageAsync("classic", "knight"),
+    value: 3,
     behavior: jumpBehavior([
       { x: -2, y: -1 },
       { x: -2, y: 1 },
@@ -41,6 +44,7 @@ const classicPieces = {
   bishop: {
     symbol: "b",
     image: getPieceImageAsync("classic", "bishop"),
+    value: 3,
     behavior: moveBehavior([
       { x: 1, y: 1 },
       { x: 1, y: -1 },
@@ -51,6 +55,7 @@ const classicPieces = {
   queen: {
     symbol: "q",
     image: getPieceImageAsync("classic", "queen"),
+    value: 9,
     behavior: moveBehavior([
       { x: 1, y: 0 },
       { x: -1, y: 0 },
@@ -65,6 +70,7 @@ const classicPieces = {
   king: {
     symbol: "k",
     image: getPieceImageAsync("classic", "king"),
+    value: 0,
     behavior: (piece: Piece, state: ChessBoardState) => {
       const board = state.pieces;
       const moves = jumpBehavior([

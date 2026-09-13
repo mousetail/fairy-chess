@@ -146,6 +146,35 @@ export function simulateMove(
   return newState;
 }
 
+/** Returns the moves of a piece that would not leave its own king in check. */
+export function getValidMoves(
+  piece: Piece,
+  board: ChessBoardState,
+): SpecialMovement[] {
+  const moves = piece.type.behavior(piece, board);
+  return moves.filter((move) => {
+    const moveWithPromotion = {
+      ...move,
+      piece,
+      from: piece.position,
+      promotion: undefined,
+    };
+
+    const simulated = simulateMove(board, moveWithPromotion);
+    return !isInCheck(piece.color, simulated);
+  });
+}
+
+/** Whether the given color has at least one legal move in this position. */
+export function hasLegalMoves(
+  color: "black" | "white",
+  board: ChessBoardState,
+): boolean {
+  return board.pieces
+    .filter((piece) => piece.color === color)
+    .some((piece) => getValidMoves(piece, board).length > 0);
+}
+
 export function applyMove(
   state: ChessBoardState,
   move: TaggedMove,

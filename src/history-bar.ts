@@ -16,11 +16,16 @@ export class HistoryBar {
   nextLogEntry: Map<HTMLDivElement, HTMLDivElement> = new Map();
   previousLogEntry: Map<HTMLDivElement, HTMLDivElement> = new Map();
 
+  private canNavigate: () => boolean;
+
   constructor(
     container: HTMLElement,
     setVisibleState: (state: ChessBoardState) => void,
+    /** Returns false to temporarily block history navigation (e.g. a modal). */
+    canNavigate: () => boolean = () => true,
   ) {
     this.setVisibleState = setVisibleState;
+    this.canNavigate = canNavigate;
 
     const movesLogContainer = document.createElement("div");
     movesLogContainer.classList.add("moves-log-container");
@@ -113,6 +118,7 @@ export class HistoryBar {
   }
 
   onClickHistoryEntry(entry: HTMLDivElement): void {
+    if (!this.canNavigate()) return;
     if (this.viewingHistory) {
       this.viewingHistory.classList.remove("active");
     }
@@ -126,6 +132,7 @@ export class HistoryBar {
   }
 
   historyBack(): void {
+    if (!this.canNavigate()) return;
     if (this.viewingHistory === null) {
       this.viewingHistory = this.latestLogEntry;
     }
@@ -136,6 +143,7 @@ export class HistoryBar {
   }
 
   historyForward(): void {
+    if (!this.canNavigate()) return;
     if (this.viewingHistory === null) {
       this.viewingHistory = this.latestLogEntry;
     }

@@ -89,8 +89,7 @@ export class PieceDragController {
         tile !== null &&
         selection?.piece.id === drag.piece.id &&
         selection.moves.some(
-          (candidate) =>
-            candidate.to.x === tile.x && candidate.to.y === tile.y,
+          (candidate) => candidate.to.x === tile.x && candidate.to.y === tile.y,
         );
       this.host.setDragHighlight(isValidTarget ? tile : null);
     }

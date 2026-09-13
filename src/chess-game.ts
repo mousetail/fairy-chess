@@ -1,8 +1,9 @@
 import {
   applyMove,
+  getValidMoves,
+  hasLegalMoves,
   isInCheck,
   pieceTypes,
-  simulateMove,
   type ChessBoardState,
   type Piece,
   type SpecialMovement,
@@ -17,6 +18,8 @@ export interface PieceType {
 
   behavior: Behavior;
   symbol: string;
+  /** Approximate point value, in pawns, used to compare material. */
+  value: number;
 }
 
 export type AiEngine = "fairy-stockfish";
@@ -65,24 +68,11 @@ export class ChessGame {
   }
 
   getValidMoves(piece: Piece): SpecialMovement[] {
-    const moves = piece.type.behavior(piece, this.state);
-    return moves.filter((move) => {
-      let moveWithPromotion = {
-        ...move,
-        piece,
-        from: piece.position,
-        promotion: undefined,
-      };
-
-      const simulated = simulateMove(this.state, moveWithPromotion);
-      return !isInCheck(piece.color, simulated);
-    });
+    return getValidMoves(piece, this.state);
   }
 
   hasLegalMoves(color: "black" | "white"): boolean {
-    return this.state.pieces
-      .filter((piece) => piece.color === color)
-      .some((piece) => this.getValidMoves(piece).length > 0);
+    return hasLegalMoves(color, this.state);
   }
 
   /**

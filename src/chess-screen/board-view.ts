@@ -41,9 +41,7 @@ export class BoardView {
         cell.addEventListener("click", () => {
           handlers.onTileClick({ x: j, y: 7 - i });
         });
-        cell.addEventListener("contextmenu", (event) =>
-          event.preventDefault(),
-        );
+        cell.addEventListener("contextmenu", (event) => event.preventDefault());
         cell.addEventListener("pointerdown", (event) =>
           handlers.onPointerDown(event),
         );
@@ -129,6 +127,13 @@ export class BoardView {
     this.checkMarker.style.setProperty("--x", `${tile.x}`);
     this.checkMarker.style.setProperty("--y", `${tile.y}`);
     this.element.appendChild(this.checkMarker);
+  }
+
+  /** Tips the given king piece over to show checkmate, or clears it when null. */
+  setCheckmatedKing(id: number | null): void {
+    this.piecesDivs.forEach((image, pieceId) => {
+      image.classList.toggle("checkmated", pieceId === id);
+    });
   }
 
   showMovePips(moves: SpecialMovement[]): void {
