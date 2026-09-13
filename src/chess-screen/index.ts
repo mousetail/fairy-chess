@@ -7,15 +7,26 @@ import {
   type Piece,
   type SpecialMovement,
 } from "../chess-board";
-import { ChessGame, type GameStatus } from "../chess-game";
+import { ChessGame, type GameStatus, type Player } from "../chess-game";
 import type { Tile } from "../chess-tile";
 import { HistoryBar } from "../history-bar";
 import type { Screen } from "../screen";
+import { AiPlayer } from "../ai/ai-player";
 import { ArrowsLayer } from "./arrows-layer";
 import { BoardView } from "./board-view";
 import { tileFromEvent } from "./board-geometry";
 import { PieceDragController } from "./piece-drag-controller";
 import { createPromotionDialogue } from "./promotion-dialogue";
+
+export interface ChessScreenOptions {
+  white?: Player;
+  black?: Player;
+}
+
+interface PlayerBar {
+  element: HTMLDivElement;
+  clock: HTMLDivElement;
+}
 
 export default class ChessScreen implements Screen {
   game: ChessGame;
@@ -31,9 +42,38 @@ export default class ChessScreen implements Screen {
   scoreWidget: HTMLDivElement;
   scoreDisplay: HTMLDivElement;
   playAgainButton: HTMLButtonElement;
+  blackPlayerBar: PlayerBar;
+  whitePlayerBar: PlayerBar;
 
-  constructor() {
+  private options: ChessScreenOptions;
+  private aiPlayer: AiPlayer | null = null;
+  private aiThinking = false;
+  private aiError: string | null = null;
+  private disposed = false;
+  private plyCount = 0;
+
+  constructor(options: ChessScreenOptions = {}) {
+    this.options = options;
     this.game = ChessGame.defaultLayout();
+    this.game.players = {
+      white: options.white ?? { type: "human" },
+      black: options.black ?? { type: "human" },
+    };
+
+    const aiConfig = [
+      this.game.players.white,
+      this.game.players.black,
+    ].find((player) => player.type === "ai");
+    if (aiConfig?.type === "ai") {
+      this.aiPlayer = new AiPlayer({
+        minTurnTimeMs: aiConfig.minTurnTimeMs,
+        difficulty: aiConfig.difficulty,
+      });
+      this.aiPlayer.onError((message) => {
+        this.aiError = message;
+        alert(`Fairy Stockfish failed to start: ${message}`);
+      });
+    }
 
     this.boardView = new BoardView({
       onTileClick: (tile) => this.clickTile(tile),
@@ -60,6 +100,14 @@ export default class ChessScreen implements Screen {
     this.playAgainButton.classList.add("play-again-button");
     this.playAgainButton.textContent = "Play again";
     this.scoreWidget.appendChild(this.playAgainButton);
+
+    this.blackPlayerBar = this.createPlayerBar(
+      this.playerLabel(this.game.players.black),
+    );
+    this.whitePlayerBar = this.createPlayerBar(
+      this.playerLabel(this.game.players.white),
+    );
+    this.updateTurnIndicator();
   }
 
   activate(parent: HTMLElement): void {
@@ -70,7 +118,9 @@ export default class ChessScreen implements Screen {
     parent.appendChild(leftColumn);
 
     this.boardView.clearPieces();
+    leftColumn.appendChild(this.blackPlayerBar.element);
     leftColumn.appendChild(this.boardView.element);
+    leftColumn.appendChild(this.whitePlayerBar.element);
     this.boardView.setArrowsLayer(this.arrowsLayer.element);
     for (const piece of this.game.state.pieces) {
       this.boardView.addPiece(piece);
@@ -82,7 +132,7 @@ export default class ChessScreen implements Screen {
     sidebar.appendChild(this.scoreWidget);
     this.playAgainButton.addEventListener("click", () => {
       this.deactivate();
-      new ChessScreen().activate(parent);
+      new ChessScreen(this.options).activate(parent);
     });
 
     this.historyBar = new HistoryBar(sidebar, (state) => {
@@ -95,6 +145,9 @@ export default class ChessScreen implements Screen {
         this.boardView.setHighlightedMoves(state.lastMove);
       }
     });
+
+    this.aiPlayer?.preload();
+    this.maybeRunAi();
   }
 
   clearSelection(): void {
@@ -115,7 +168,7 @@ export default class ChessScreen implements Screen {
   }
 
   clickTile(tile: Tile): void {
-    if (this.handlingPromotion) return;
+    if (this.handlingPromotion || this.aiThinking) return;
     if (!this.canInteract()) return;
 
     const piece = this.game.getPieceAt(tile);
@@ -152,7 +205,7 @@ export default class ChessScreen implements Screen {
   }
 
   startPieceDrag(event: PointerEvent): void {
-    if (this.handlingPromotion || !this.canInteract()) return;
+    if (this.handlingPromotion || this.aiThinking || !this.canInteract()) return;
 
     const tile = tileFromEvent(this.boardView.element, event);
     if (!tile) return;
@@ -191,6 +244,9 @@ export default class ChessScreen implements Screen {
     this.historyBar!.addLogEntry(cloneChessBoardState(this.game.state), pgn);
     this.arrowsLayer.clear();
     this.clearSelection();
+    this.plyCount++;
+    this.updateTurnIndicator();
+    this.maybeRunAi();
   }
 
   showPromotionOptions(
@@ -241,5 +297,68 @@ export default class ChessScreen implements Screen {
     }
   }
 
-  deactivate(): void {}
+  deactivate(): void {
+    this.disposed = true;
+    this.aiPlayer?.dispose();
+    this.aiPlayer = null;
+  }
+
+  private maybeRunAi(): void {
+    if (!this.aiPlayer || this.aiError || this.gameEnded || this.disposed) return;
+    if (!this.historyBar?.isAtPresent()) return;
+    const turn = this.game.state.turn;
+    if (this.game.players[turn].type !== "ai") return;
+    void this.runAiMove();
+  }
+
+  private async runAiMove(): Promise<void> {
+    const aiPlayer = this.aiPlayer;
+    if (!aiPlayer || this.aiThinking) return;
+
+    this.aiThinking = true;
+    try {
+      const { piece, move } = await aiPlayer.chooseMove(
+        this.game,
+        Math.floor(this.plyCount / 2) + 1,
+      );
+      if (this.disposed || this.gameEnded) return;
+      if (this.game.state.turn !== piece.color) return;
+      this.resolveMove(piece, move);
+    } catch (error) {
+      if (this.disposed) return;
+      this.aiError = error instanceof Error ? error.message : String(error);
+      alert(`Fairy Stockfish failed: ${this.aiError}`);
+    } finally {
+      this.aiThinking = false;
+    }
+  }
+
+  private createPlayerBar(name: string): PlayerBar {
+    const element = document.createElement("div");
+    element.classList.add("player-bar");
+
+    const nameElement = document.createElement("div");
+    nameElement.classList.add("player-name");
+    nameElement.textContent = name;
+
+    const clock = document.createElement("div");
+    clock.classList.add("player-clock");
+    clock.textContent = "--:--";
+
+    element.appendChild(nameElement);
+    element.appendChild(clock);
+    return { element, clock };
+  }
+
+  private playerLabel(player: Player): string {
+    if (player.type === "human") return "Human";
+    const name = player.engine === "fairy-stockfish" ? "Fairy Stockfish" : player.engine;
+    return `${name} (difficulty ${player.difficulty})`;
+  }
+
+  private updateTurnIndicator(): void {
+    const turn = this.game.state.turn;
+    this.blackPlayerBar.clock.classList.toggle("active", turn === "black");
+    this.whitePlayerBar.clock.classList.toggle("active", turn === "white");
+  }
 }

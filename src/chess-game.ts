@@ -19,13 +19,19 @@ export interface PieceType {
   symbol: string;
 }
 
-type Player =
+export type AiEngine = "fairy-stockfish";
+
+export type Player =
   | {
       type: "human";
     }
   | {
       type: "ai";
+      engine: AiEngine;
+      /** Difficulty from 0 (weakest) to 5 (strongest). */
       difficulty: number;
+      /** Minimum time, in milliseconds, the AI waits before playing. */
+      minTurnTimeMs: number;
     };
 
 export type GameStatus = "checkmate" | "stalemate";
