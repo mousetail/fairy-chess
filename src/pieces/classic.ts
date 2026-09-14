@@ -16,12 +16,24 @@ const classicPieces = {
     image: getPieceImageAsync("classic", "pawn"),
     behavior: normalizeColor(pawnBehavior),
     value: 1,
+    displayName: "Pawn",
+    description: "Moves 1 or 2 squares forward; captures diagonally.",
+    diagram: {
+      size: 5,
+      rows: ["..x..", ".cxc.", "..o..", ".....", "....."],
+    },
   },
   rook: {
     symbol: "r",
     betza: "R",
     image: getPieceImageAsync("classic", "rook"),
     value: 5,
+    displayName: "Rook",
+    description: "Slides any number of squares horizontally or vertically.",
+    diagram: {
+      size: 5,
+      rows: ["..x..", "..x..", "xxoxx", "..x..", "..x.."],
+    },
     behavior: moveBehavior([
       { x: -1, y: 0 },
       { x: 1, y: 0 },
@@ -34,6 +46,12 @@ const classicPieces = {
     betza: "N",
     image: getPieceImageAsync("classic", "knight"),
     value: 3,
+    displayName: "Knight",
+    description: "Leaps in an L shape, jumping over other pieces.",
+    diagram: {
+      size: 5,
+      rows: [".x.x.", "x...x", "..o..", "x...x", ".x.x."],
+    },
     behavior: jumpBehavior([
       { x: -2, y: -1 },
       { x: -2, y: 1 },
@@ -50,6 +68,12 @@ const classicPieces = {
     betza: "B",
     image: getPieceImageAsync("classic", "bishop"),
     value: 3,
+    displayName: "Bishop",
+    description: "Slides any number of squares diagonally.",
+    diagram: {
+      size: 5,
+      rows: ["x...x", ".x.x.", "..o..", ".x.x.", "x...x"],
+    },
     behavior: moveBehavior([
       { x: 1, y: 1 },
       { x: 1, y: -1 },
@@ -62,6 +86,12 @@ const classicPieces = {
     betza: "Q",
     image: getPieceImageAsync("classic", "queen"),
     value: 9,
+    displayName: "Queen",
+    description: "Slides any number of squares in any direction.",
+    diagram: {
+      size: 5,
+      rows: ["x.x.x", ".xxx.", "xxoxx", ".xxx.", "x.x.x"],
+    },
     behavior: moveBehavior([
       { x: 1, y: 0 },
       { x: -1, y: 0 },
@@ -79,6 +109,12 @@ const classicPieces = {
     promotionAbility: "deny",
     image: getPieceImageAsync("classic", "king"),
     value: 0,
+    displayName: "King",
+    description: "Moves one square in any direction; may castle.",
+    diagram: {
+      size: 5,
+      rows: [".....", ".xxx.", ".xox.", ".xxx.", "....."],
+    },
     behavior: (piece: Piece, state: ChessBoardState) => {
       const board = state.pieces;
       const moves = jumpBehavior([

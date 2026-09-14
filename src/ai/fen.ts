@@ -20,9 +20,7 @@ export type ResolvedMove = {
 
 function pieceToFenChar(piece: Piece, state: ChessBoardState): string {
   const symbol = state.symbols.get(piece.type) ?? piece.type.symbol;
-  return piece.color === "white"
-    ? symbol.toUpperCase()
-    : symbol.toLowerCase();
+  return piece.color === "white" ? symbol.toUpperCase() : symbol.toLowerCase();
 }
 
 /** Serialises the board into the standard FEN dialect understood by Fairy Stockfish. */

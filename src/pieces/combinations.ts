@@ -80,6 +80,13 @@ const combinationPieces = {
     fallbackSymbols: ["w"],
     image: getPieceImageAsync("centaur", "centaur-rook"),
     value: 8,
+    displayName: "Knook",
+    aliases: ["Empress", "Chancellor"],
+    description: "Moves as a rook or as a knight.",
+    diagram: {
+      size: 5,
+      rows: [".xxx.", "x.x.x", "xxoxx", "x.x.x", ".xxx."],
+    },
     behavior: combine(knight, rook),
   },
   knishop: {
@@ -88,6 +95,13 @@ const combinationPieces = {
     fallbackSymbols: ["v"],
     image: getPieceImageAsync("centaur", "centaur-bishop"),
     value: 6,
+    displayName: "Knishop",
+    aliases: ["Archbishop", "Princess"],
+    description: "Moves as a bishop or as a knight.",
+    diagram: {
+      size: 5,
+      rows: ["xxxxx", "xxxxx", "..o..", "xxxxx", "xxxxx"],
+    },
     behavior: combine(knight, bishop),
   },
   kniween: {
@@ -96,6 +110,13 @@ const combinationPieces = {
     fallbackSymbols: ["g"],
     image: getPieceImageAsync("centaur", "centaur-queen"),
     value: 12,
+    displayName: "Kniween",
+    aliases: ["Amazon"],
+    description: "Moves as a queen or as a knight.",
+    diagram: {
+      size: 5,
+      rows: ["xxxxx", "xxxxx", "xxoxx", "xxxxx", "xxxxx"],
+    },
     behavior: combine(knight, queen),
   },
   kning: {
@@ -104,6 +125,13 @@ const combinationPieces = {
     fallbackSymbols: ["h"],
     image: getPieceImageAsync("centaur", "centaur-king"),
     value: 3,
+    displayName: "Kning",
+    aliases: ["Centaur"],
+    description: "Moves as a king or as a knight.",
+    diagram: {
+      size: 5,
+      rows: [".x.x.", "xxxxx", ".xox.", "xxxxx", ".x.x."],
+    },
     behavior: combine(knight, king),
   },
   bing: {
@@ -111,6 +139,12 @@ const combinationPieces = {
     betza: "BK",
     image: getPieceImageAsync("helios", "helios-bishop"),
     value: 3,
+    displayName: "Bing",
+    description: "Moves as a bishop or as a king.",
+    diagram: {
+      size: 5,
+      rows: ["x...x", ".xxx.", ".xox.", ".xxx.", "x...x"],
+    },
     behavior: combine(bishop, king),
   },
   ring: {
@@ -118,6 +152,12 @@ const combinationPieces = {
     betza: "RK",
     image: getPieceImageAsync("helios", "helios-rook"),
     value: 5,
+    displayName: "Ring",
+    description: "Moves as a rook or as a king.",
+    diagram: {
+      size: 5,
+      rows: ["..x..", ".xxx.", "xxoxx", ".xxx.", "..x.."],
+    },
     behavior: combine(rook, king),
   },
 } satisfies Record<string, PieceType>;

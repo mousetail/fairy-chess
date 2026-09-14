@@ -190,6 +190,9 @@ body {
   flex-direction: column;
   gap: 0.5rem;
   margin-left: 0.5rem;
+  /* Matches the history bar's grid (2rem + 5rem + 5rem + 2 gaps of 0.5rem)
+     plus its 2px borders, so long text can never widen the sidebar. */
+  flex: 0 0 13.25rem;
 }
 
 .score-widget {
@@ -198,6 +201,96 @@ body {
   border: 2px solid black;
   background-color: var(--light-square-color);
   color: black;
+}
+
+.piece-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  /* A fixed height so the panel never grows or scrolls; the diagram and the
+     reserved text lines are sized to fit exactly. */
+  flex: 0 0 12.5rem;
+  padding: 0.5rem;
+  overflow: hidden;
+  border: 2px solid black;
+  background-color: var(--light-square-color);
+  color: black;
+}
+
+.piece-info-title {
+  font-size: 1.2rem;
+  font-weight: bold;
+}
+
+.piece-info-aliases {
+  /* Always reserves one line, so panels shift neither up nor down when
+     selecting a piece with or without aliases. */
+  min-height: 0.9rem;
+  font-size: 0.75rem;
+  font-style: italic;
+  opacity: 0.75;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.piece-info-diagram {
+  display: grid;
+  grid-template-columns: repeat(var(--size, 5), minmax(0, 1fr));
+  grid-template-rows: repeat(var(--size, 5), minmax(0, 1fr));
+  /* Fixed size, so bigger diagrams simply get smaller squares. */
+  width: 6rem;
+  height: 6rem;
+  margin: 0 auto;
+  border: 2px solid black;
+}
+
+.piece-info-tile {
+  position: relative;
+  min-width: 0;
+  background-color: var(--light-square-color);
+}
+
+.piece-info-tile.even {
+  background-color: var(--dark-square-color);
+}
+
+.piece-info-piece {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.piece-info-tile.move::after,
+.piece-info-tile.capture::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.piece-info-tile.move::after {
+  inset: 30%;
+  border-radius: 50%;
+  background-color: var(--pip-color);
+}
+
+.piece-info-tile.capture::after {
+  inset: 0;
+  background: center / contain no-repeat url("./assets/corners.svg");
+}
+
+.piece-info-description {
+  /* Exactly two lines; anything longer is clipped so the height is stable. */
+  height: 2.4em;
+  overflow: hidden;
+  font-size: 0.8rem;
+  line-height: 1.2;
+}
+
+.piece-info.empty .piece-info-diagram {
+  display: none;
 }
 
 .score-widget.hidden {
@@ -241,7 +334,7 @@ body {
   display: flex;
 
   & button {
-    background: none;
+    background: white;
     border: 2px solid black;
     width: 2rem;
     height: 2rem;

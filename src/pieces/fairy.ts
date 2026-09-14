@@ -108,6 +108,12 @@ const fairyPieces = {
     promotionAbility: "priority",
     image: getPieceImageAsync("fantasy", "cyclops"),
     value: 2,
+    displayName: "Wazir",
+    description: "Moves one square horizontally or vertically.",
+    diagram: {
+      size: 5,
+      rows: [".....", "..x..", ".xox.", "..x..", "....."],
+    },
     behavior: jumpBehavior([
       { x: 1, y: 0 },
       { x: -1, y: 0 },
@@ -121,6 +127,13 @@ const fairyPieces = {
     promotionAbility: "priority",
     image: getPieceImageAsync("fantasy", "archon"),
     value: 2,
+    displayName: "Ferz",
+    aliases: ["Fers"],
+    description: "Moves one square diagonally.",
+    diagram: {
+      size: 5,
+      rows: [".....", ".x.x.", "..o..", ".x.x.", "....."],
+    },
     behavior: jumpBehavior([
       { x: 1, y: 1 },
       { x: 1, y: -1 },
@@ -134,6 +147,20 @@ const fairyPieces = {
     fallbackSymbols: ["m"],
     image: getPieceImageAsync("nature", "kangaroo"),
     value: 3,
+    displayName: "Camel",
+    description: "Leaps one square then three, over other pieces.",
+    diagram: {
+      size: 7,
+      rows: [
+        "..x.x..",
+        ".......",
+        "x.....x",
+        "...o...",
+        "x.....x",
+        ".......",
+        "..x.x..",
+      ],
+    },
     behavior: jumpBehavior([
       { x: 1, y: 3 },
       { x: 1, y: -3 },
@@ -150,6 +177,20 @@ const fairyPieces = {
     betza: "Z",
     image: getPieceImageAsync("nature", "zebra"),
     value: 3,
+    displayName: "Zebra",
+    description: "Leaps two squares then three, over other pieces.",
+    diagram: {
+      size: 7,
+      rows: [
+        ".x...x.",
+        "x.....x",
+        ".......",
+        "...o...",
+        ".......",
+        "x.....x",
+        ".x...x.",
+      ],
+    },
     behavior: jumpBehavior([
       { x: 2, y: 3 },
       { x: 2, y: -3 },
@@ -167,6 +208,12 @@ const fairyPieces = {
     promotionAbility: "deny",
     image: getPieceImageAsync("geometry", "square"),
     value: 1,
+    displayName: "Wall",
+    description: "Cannot move; captures any adjacent enemy piece.",
+    diagram: {
+      size: 5,
+      rows: [".....", ".ccc.", ".coc.", ".ccc.", "....."],
+    },
     behavior: wallBehavior,
   },
   unicorn: {
@@ -174,6 +221,21 @@ const fairyPieces = {
     betza: "NN",
     image: getPieceImageAsync("fantasy", "unicorn"),
     value: 5,
+    displayName: "Unicorn",
+    aliases: ["Nightrider"],
+    description: "Slides any number of squares along a knight's line.",
+    diagram: {
+      size: 7,
+      rows: [
+        ".......",
+        "..x.x..",
+        ".x...x.",
+        "...o...",
+        ".x...x.",
+        "..x.x..",
+        ".......",
+      ],
+    },
     behavior: nightriderBehavior,
   },
   pylon: {
@@ -181,6 +243,12 @@ const fairyPieces = {
     betza: "mQcfF",
     image: getPieceImageAsync("fantasy", "pylon"),
     value: 5,
+    displayName: "Pylon",
+    description: "Slides like a queen; captures diagonally forward.",
+    diagram: {
+      size: 5,
+      rows: ["x.x.x", ".cxc.", "xxoxx", ".xxx.", "x.x.x"],
+    },
     behavior: pylonBehavior,
   },
 } satisfies Record<string, PieceType>;

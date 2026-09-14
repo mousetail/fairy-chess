@@ -9,13 +9,10 @@ import {
   type Piece,
   type SpecialMovement,
 } from "../chess-board";
-import {
-  ChessGame,
-  type GameStatus,
-  type Player,
-} from "../chess-game";
+import { ChessGame, type GameStatus, type Player } from "../chess-game";
 import type { Tile } from "../chess-tile";
 import { HistoryBar } from "../history-bar";
+import { PieceInfoBar } from "../piece-info-bar";
 import { chaosLevels } from "../replacement-rules";
 import type { Screen } from "../screen";
 import { AiPlayer } from "../ai/ai-player";
@@ -67,8 +64,21 @@ export default class ChessScreen implements Screen {
   dragController: PieceDragController;
   movesLog: HTMLDivElement;
   historyBar: HistoryBar | null = null;
+  pieceInfoBar: PieceInfoBar;
 
   selectedPiece: { piece: Piece; moves: SpecialMovement[] } | null = null;
+  /**
+   * The position the board is currently showing. While the history is being
+   * browsed this is a past snapshot, so inspecting pieces must read it rather
+   * than the live game state.
+   */
+  visibleState: ChessBoardState;
+  /**
+   * The piece selected when the pointer last went down, used to tell a click on
+   * an already-selected piece apart from the selection the drag controller makes
+   * on pointerdown.
+   */
+  private pointerDownSelectionId: number | null = null;
   handlingPromotion: boolean = false;
   gameEnded: boolean = false;
   scoreWidget: HTMLDivElement;
@@ -88,6 +98,7 @@ export default class ChessScreen implements Screen {
     this.options = options;
     const chaos = chaosLevels[options.chaosLevel ?? 0] ?? chaosLevels[0];
     this.game = ChessGame.defaultLayout(chaos);
+    this.visibleState = this.game.state;
     this.game.players = {
       white: options.white ?? { type: "human" },
       black: options.black ?? { type: "human" },
@@ -122,6 +133,7 @@ export default class ChessScreen implements Screen {
     });
 
     this.movesLog = document.createElement("div");
+    this.pieceInfoBar = new PieceInfoBar();
 
     this.scoreWidget = document.createElement("div");
     this.scoreWidget.classList.add("score-widget", "hidden");
@@ -163,6 +175,7 @@ export default class ChessScreen implements Screen {
     sidebar.classList.add("sidebar");
     parent.appendChild(sidebar);
     sidebar.appendChild(this.scoreWidget);
+    sidebar.appendChild(this.pieceInfoBar.element);
     this.playAgainButton.addEventListener("click", () => {
       this.deactivate();
       if (this.options.onPlayAgain) {
@@ -175,6 +188,7 @@ export default class ChessScreen implements Screen {
     this.historyBar = new HistoryBar(
       sidebar,
       (state) => {
+        this.visibleState = state;
         this.clearSelection();
         this.boardView.clearPieces();
         for (const piece of state.pieces) {
@@ -190,6 +204,7 @@ export default class ChessScreen implements Screen {
     );
 
     document.addEventListener("keydown", this.onKeyDown);
+    document.addEventListener("pointerdown", this.onDocumentPointerDown);
 
     this.aiPlayer?.preload();
     this.maybeRunAi();
@@ -204,6 +219,7 @@ export default class ChessScreen implements Screen {
     if (event.button === 2) {
       this.arrowsLayer.beginArrow(event);
     } else if (event.button === 0) {
+      this.pointerDownSelectionId = this.selectedPiece?.piece.id ?? null;
       this.startPieceDrag(event);
     }
   }
@@ -212,26 +228,53 @@ export default class ChessScreen implements Screen {
     return !this.gameEnded && this.historyBar?.isAtPresent() === true;
   }
 
+  /** The piece occupying a tile in the position the board is showing. */
+  private pieceAt(tile: Tile): Piece | undefined {
+    return this.visibleState.pieces.find(
+      (piece) => piece.position.x === tile.x && piece.position.y === tile.y,
+    );
+  }
+
   clickTile(tile: Tile): void {
-    if (this.handlingPromotion || this.aiThinking) return;
-    if (!this.canInteract()) return;
+    if (this.handlingPromotion) return;
+
+    // Inspecting works while the history is being browsed or the engine is
+    // thinking, but neither allows actually playing a move. The history shows a
+    // past position, so read the piece from what is on display.
+    if (!this.canInteract() || this.aiThinking) {
+      const inspected = this.pieceAt(tile);
+      if (inspected) this.pieceInfoBar.show(inspected.type);
+      if (!this.canInteract()) this.clearSelection();
+      return;
+    }
 
     const piece = this.game.getPieceAt(tile);
-    if (
-      piece?.color === this.game.state.turn &&
-      this.game.players[piece.color].type === "human"
-    ) {
-      this.selectPiece(piece);
-    } else if (this.selectedPiece !== null) {
+
+    // A legal destination of the selected piece completes the move, taking
+    // priority over inspecting whatever occupies the tile.
+    if (this.selectedPiece !== null) {
       const move = this.selectedPiece.moves.find(
         (move) => move.to.x === tile.x && move.to.y === tile.y,
       );
-
       if (move) {
         this.performMove(this.selectedPiece.piece, move);
-      } else {
-        this.clearSelection();
+        return;
       }
+    }
+
+    if (piece) {
+      this.pieceInfoBar.show(piece.type);
+    }
+
+    const ownHumanPiece =
+      piece !== undefined &&
+      piece.color === this.game.state.turn &&
+      this.game.players[piece.color].type === "human";
+
+    // Clicking the already-selected piece again deselects it; anything else
+    // (an enemy piece, or an empty square) also drops the selection.
+    if (ownHumanPiece && this.pointerDownSelectionId !== piece.id) {
+      this.selectPiece(piece);
     } else {
       this.clearSelection();
     }
@@ -286,6 +329,7 @@ export default class ChessScreen implements Screen {
       this.setGameEnd.bind(this),
     );
     this.boardView.setHighlightedMoves(taggedMove);
+    this.visibleState = this.game.state;
 
     this.historyBar!.addLogEntry(cloneChessBoardState(this.game.state), pgn);
     this.arrowsLayer.clear();
@@ -347,12 +391,14 @@ export default class ChessScreen implements Screen {
       const moves = this.game.getValidMoves(piece);
       this.selectedPiece = { piece, moves };
       this.boardView.showMovePips(moves);
+      this.pieceInfoBar.show(piece.type);
     }
   }
 
   deactivate(): void {
     this.disposed = true;
     document.removeEventListener("keydown", this.onKeyDown);
+    document.removeEventListener("pointerdown", this.onDocumentPointerDown);
     this.aiPlayer?.dispose();
     this.aiPlayer = null;
   }
@@ -377,6 +423,17 @@ export default class ChessScreen implements Screen {
       event.preventDefault();
       this.historyBar?.historyForward();
     }
+  };
+
+  /**
+   * Clicking anywhere off the board drops the movement selection. The sidebar is
+   * left alone, so the last inspected piece stays on display.
+   */
+  private onDocumentPointerDown = (event: PointerEvent): void => {
+    if (event.button !== 0 || this.handlingPromotion) return;
+    const target = event.target as Node | null;
+    if (target && this.boardView.element.contains(target)) return;
+    this.clearSelection();
   };
 
   private maybeRunAi(): void {

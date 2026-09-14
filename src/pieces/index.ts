@@ -2,11 +2,20 @@ import classicPieces from "./classic";
 import combinationPieces from "./combinations";
 import fairyPieces from "./fairy";
 
+import type { PieceDiagram } from "./diagram";
 import type { Behavior, LazyImage } from "./utils";
 
 export interface PieceType {
   image: LazyImage;
   canEnPassant?: boolean;
+  /** Human-readable name shown in the piece info panel. */
+  displayName: string;
+  /** Other names this piece is known by, shown under the display name. */
+  aliases?: string[];
+  /** A short explanation of how the piece moves, shown under its diagram. */
+  description: string;
+  /** A hand-drawn picture of the piece's movement pattern. */
+  diagram: PieceDiagram;
 
   behavior: Behavior;
   /**
@@ -35,7 +44,6 @@ export interface PieceType {
   /** Approximate point value, in pawns, used to compare material. */
   value: number;
 }
-
 
 const pieceTypes = {
   ...classicPieces,

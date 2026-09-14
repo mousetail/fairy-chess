@@ -10,11 +10,7 @@ import {
 } from "./chess-board";
 import type { Tile } from "./chess-tile";
 import pieceTypes, { type PieceType } from "./pieces";
-import {
-  applyChaos,
-  chaosLevels,
-  type ChaosLevel,
-} from "./replacement-rules";
+import { applyChaos, chaosLevels, type ChaosLevel } from "./replacement-rules";
 
 /**
  * Assigns each piece type a unique symbol, preferring its standard `symbol` and
