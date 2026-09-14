@@ -1,6 +1,6 @@
-import type { PieceType } from "./chess-game";
 import { tileToAlgebraic, type Tile } from "./chess-tile";
-import classicPieces from "./pieces/classic";
+import type { PieceType } from "./pieces";
+import pieceTypes from "./pieces";
 
 export type SpecialMovement = {
   to: Tile;
@@ -17,6 +17,7 @@ export function specialMovementToPgn(
   if (m.castling) {
     return "O-O";
   }
+  const symbolOf = (type: PieceType) => state.symbols.get(type) ?? type.symbol;
   const sameType = state.pieces.filter(
     (p) =>
       p.type === m.piece.type && p.color === m.piece.color && p !== m.piece,
@@ -36,9 +37,9 @@ export function specialMovementToPgn(
   }
   let promotion = "";
   if (m.promotion) {
-    promotion = "=" + m.promotion.piece.symbol.toLocaleUpperCase();
+    promotion = "=" + symbolOf(m.promotion.piece).toLocaleUpperCase();
   }
-  return `${m.piece.type === pieceTypes.pawn ? "" : m.piece.type.symbol.toLocaleUpperCase()}${disamb}${m.type === "capture" ? "x" : ""}${tileToAlgebraic(m.to)}${promotion}`;
+  return `${m.piece.type === pieceTypes.pawn ? "" : symbolOf(m.piece.type).toLocaleUpperCase()}${disamb}${m.type === "capture" ? "x" : ""}${tileToAlgebraic(m.to)}${promotion}`;
 }
 
 export type Promotion =
@@ -68,10 +69,6 @@ export function movementHasNoPendingPromotion(
   return !m.promotion || m.promotion.state === "resolved";
 }
 
-export const pieceTypes = {
-  ...classicPieces,
-} satisfies Record<string, PieceType>;
-
 export type Piece = {
   type: PieceType;
   color: "black" | "white";
@@ -95,6 +92,11 @@ export type ChessBoardState = {
   turn: "black" | "white";
   halfTurnNumber: number;
   lastMove: TaggedMove | undefined;
+  /**
+   * The symbol used for each piece type in play. Fixed when the game is set up
+   * so that pieces sharing a standard symbol get distinct fallbacks.
+   */
+  symbols: Map<PieceType, string>;
 };
 
 function getPieceAt(state: ChessBoardState, tile: Tile): Piece | undefined {

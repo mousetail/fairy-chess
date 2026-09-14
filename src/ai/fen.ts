@@ -1,12 +1,13 @@
 import {
   movementHasNoPendingPromotion,
   movementHasPendingPromotion,
-  pieceTypes,
   type ChessBoardState,
   type Piece,
   type SpecialMovement,
 } from "../chess-board";
-import type { ChessGame, PieceType } from "../chess-game";
+import type { ChessGame } from "../chess-game";
+import type { PieceType } from "../pieces";
+import pieceTypes from "../pieces";
 
 const FILES = "abcdefgh";
 
@@ -17,10 +18,11 @@ export type ResolvedMove = {
   };
 };
 
-function pieceToFenChar(piece: Piece): string {
+function pieceToFenChar(piece: Piece, state: ChessBoardState): string {
+  const symbol = state.symbols.get(piece.type) ?? piece.type.symbol;
   return piece.color === "white"
-    ? piece.type.symbol.toUpperCase()
-    : piece.type.symbol.toLowerCase();
+    ? symbol.toUpperCase()
+    : symbol.toLowerCase();
 }
 
 /** Serialises the board into the standard FEN dialect understood by Fairy Stockfish. */
@@ -44,7 +46,7 @@ export function boardStateToFen(
         row += empty;
         empty = 0;
       }
-      row += pieceToFenChar(piece);
+      row += pieceToFenChar(piece, state);
     }
     if (empty > 0) row += empty;
     rows.push(row);
@@ -98,7 +100,7 @@ function boardStateToCastlingRights(state: ChessBoardState): string {
 
 /** Converts a UCI move (e.g. `e2e4`, `e7e8q`) into the game's own move representation. */
 export function resolveUciMove(game: ChessGame, uci: string): ResolvedMove {
-  const match = /^([a-h])([1-8])([a-h])([1-8])([qrbn])?$/i.exec(uci.trim());
+  const match = /^([a-h])([1-8])([a-h])([1-8])([a-z])?$/i.exec(uci.trim());
   if (!match) {
     throw new Error(`Unsupported engine move: ${uci}`);
   }
@@ -128,7 +130,9 @@ export function resolveUciMove(game: ChessGame, uci: string): ResolvedMove {
   if (movementHasPendingPromotion(move)) {
     const promotionPiece =
       move.promotion.options.find(
-        (option) => option.symbol.toLowerCase() === promotionSymbol,
+        (option) =>
+          (game.state.symbols.get(option) ?? option.symbol).toLowerCase() ===
+          promotionSymbol,
       ) ?? move.promotion.options[0];
     return {
       piece,

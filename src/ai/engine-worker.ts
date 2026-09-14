@@ -16,6 +16,14 @@ interface CommandMessage {
   command: string;
 }
 
+interface WriteFileMessage {
+  type: "writeFile";
+  path: string;
+  content: string;
+}
+
+type IncomingMessage = CommandMessage | WriteFileMessage;
+
 let enginePromise: Promise<StockfishModule> | null = null;
 
 function getEngine(): Promise<StockfishModule> {
@@ -34,11 +42,18 @@ function getEngine(): Promise<StockfishModule> {
 }
 
 workerScope.addEventListener("message", (event: MessageEvent) => {
-  const data = event.data as CommandMessage | undefined;
-  if (data?.type !== "command") return;
+  const data = event.data as IncomingMessage | undefined;
+  if (data?.type !== "command" && data?.type !== "writeFile") return;
 
   void getEngine()
-    .then((engine) => engine.postMessage(data.command))
+    .then((engine) => {
+      if (data.type === "writeFile") {
+        engine.FS.writeFile(data.path, data.content);
+        workerScope.postMessage({ type: "fileWritten", path: data.path });
+      } else {
+        engine.postMessage(data.command);
+      }
+    })
     .catch((error: unknown) => {
       enginePromise = null;
       workerScope.postMessage({

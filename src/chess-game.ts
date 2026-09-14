@@ -3,23 +3,46 @@ import {
   getValidMoves,
   hasLegalMoves,
   isInCheck,
-  pieceTypes,
   type ChessBoardState,
   type Piece,
   type SpecialMovement,
   type TaggedMove,
 } from "./chess-board";
 import type { Tile } from "./chess-tile";
-import type { Behavior, LazyImage } from "./pieces/utils";
+import pieceTypes, { type PieceType } from "./pieces";
+import {
+  applyChaos,
+  chaosLevels,
+  type ChaosLevel,
+} from "./replacement-rules";
 
-export interface PieceType {
-  image: LazyImage;
-  canEnPassant?: boolean;
+/**
+ * Assigns each piece type a unique symbol, preferring its standard `symbol` and
+ * otherwise the first free entry of its `fallbackSymbols`. Fairy-Stockfish only
+ * supports one character per piece, so symbols are compared case-insensitively.
+ */
+export function resolveSymbols(
+  types: Iterable<PieceType>,
+): Map<PieceType, string> {
+  const used = new Set<string>();
+  const symbols = new Map<PieceType, string>();
+  for (const type of types) {
+    const candidates = [type.symbol, ...(type.fallbackSymbols ?? [])];
+    const symbol =
+      candidates.find((candidate) => !used.has(candidate.toLowerCase())) ??
+      firstUnusedLetter(used);
+    used.add(symbol.toLowerCase());
+    symbols.set(type, symbol);
+  }
+  return symbols;
+}
 
-  behavior: Behavior;
-  symbol: string;
-  /** Approximate point value, in pawns, used to compare material. */
-  value: number;
+function firstUnusedLetter(used: Set<string>): string {
+  for (let code = "a".charCodeAt(0); code <= "z".charCodeAt(0); code++) {
+    const letter = String.fromCharCode(code);
+    if (!used.has(letter)) return letter;
+  }
+  throw new Error("No unused piece symbol available");
 }
 
 export type AiEngine = "fairy-stockfish";
@@ -54,6 +77,7 @@ export class ChessGame {
       turn: "white",
       halfTurnNumber: 0,
       lastMove: undefined,
+      symbols: new Map(),
     };
   }
 
@@ -101,7 +125,7 @@ export class ChessGame {
     }
   }
 
-  static defaultLayout(): ChessGame {
+  static defaultLayout(chaos: ChaosLevel = chaosLevels[0]): ChessGame {
     const board = new ChessGame();
     const back = [
       pieceTypes.rook,
@@ -145,6 +169,10 @@ export class ChessGame {
         id: x + 24,
       });
     }
+    applyChaos(board.state, chaos);
+    board.state.symbols = resolveSymbols(
+      new Set(board.state.pieces.map((piece) => piece.type)),
+    );
     return board;
   }
 }

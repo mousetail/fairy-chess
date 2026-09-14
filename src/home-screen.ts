@@ -1,5 +1,6 @@
 import ChessScreen, { type ChessScreenOptions } from "./chess-screen/index";
 import type { Player } from "./chess-game";
+import { chaosLevels } from "./replacement-rules";
 import type { Screen } from "./screen";
 
 interface RadioGroup {
@@ -100,13 +101,7 @@ export class HomeScreen implements Screen {
     chaosLevelSubHeader.textContent = "Chaos Level Preference";
     container.appendChild(chaosLevelSubHeader);
 
-    const chaosOptions = [
-      "normal chess",
-      "one fairy piece",
-      "several fairy pieces",
-      "full random symetric",
-      "full random asymetric",
-    ];
+    const chaosOptions = chaosLevels.map((level) => level.label);
     const chaosLevelSlider = this.createSlider(
       "Chaos Level",
       chaosOptions,
@@ -134,6 +129,7 @@ export class HomeScreen implements Screen {
         settings.mode,
         minTurnTimeInput,
         difficultySlider.getValue(),
+        chaosLevelSlider.getValue(),
       );
       options.onPlayAgain = () => new HomeScreen(settings).activate(parent);
       this.deactivate();
@@ -168,8 +164,14 @@ export class HomeScreen implements Screen {
     mode: string | null,
     minTurnTimeInput: HTMLInputElement,
     difficultyValue: string,
+    chaosLevelValue: string,
   ): ChessScreenOptions {
-    if (mode !== "vs AI") return {};
+    const parsedChaos = Number.parseInt(chaosLevelValue, 10);
+    const chaosLevel = Number.isFinite(parsedChaos)
+      ? Math.min(chaosLevels.length - 1, Math.max(0, parsedChaos))
+      : 0;
+
+    if (mode !== "vs AI") return { chaosLevel };
 
     const seconds = Number.parseFloat(minTurnTimeInput.value);
     const minTurnTimeMs =
@@ -186,7 +188,7 @@ export class HomeScreen implements Screen {
       difficulty,
       minTurnTimeMs,
     };
-    return { black: opponent };
+    return { black: opponent, chaosLevel };
   }
 
   createSlider(

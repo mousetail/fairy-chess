@@ -6,10 +6,16 @@ interface Waiter {
   reject: (error: Error) => void;
 }
 
+interface FileWaiter {
+  resolve: () => void;
+  reject: (error: Error) => void;
+}
+
 /** Promise-based wrapper around the Fairy Stockfish UCI worker. */
 export class FairyStockfishEngine {
   private worker: Worker;
   private waiters = new Set<Waiter>();
+  private fileWaiters = new Map<string, FileWaiter>();
   private errorListeners = new Set<(message: string) => void>();
   private failure: Error | null = null;
   private startPromise: Promise<void> | null = null;
@@ -23,7 +29,12 @@ export class FairyStockfishEngine {
 
   private onMessage(data: unknown): void {
     if (data === null || typeof data !== "object") return;
-    const message = data as { type?: string; line?: string; message?: string };
+    const message = data as {
+      type?: string;
+      line?: string;
+      message?: string;
+      path?: string;
+    };
 
     if (message.type === "line" && typeof message.line === "string") {
       for (const waiter of [...this.waiters]) {
@@ -31,6 +42,15 @@ export class FairyStockfishEngine {
           this.waiters.delete(waiter);
           waiter.resolve(message.line);
         }
+      }
+      return;
+    }
+
+    if (message.type === "fileWritten" && typeof message.path === "string") {
+      const waiter = this.fileWaiters.get(message.path);
+      if (waiter) {
+        this.fileWaiters.delete(message.path);
+        waiter.resolve();
       }
       return;
     }
@@ -43,6 +63,9 @@ export class FairyStockfishEngine {
         this.waiters.delete(waiter);
         waiter.reject(this.failure);
       }
+      for (const waiter of [...this.fileWaiters.values()])
+        waiter.reject(this.failure);
+      this.fileWaiters.clear();
       for (const listener of [...this.errorListeners])
         listener(this.failure.message);
     }
@@ -87,6 +110,29 @@ export class FairyStockfishEngine {
     this.send(`setoption name ${name} value ${value}`);
   }
 
+  /**
+   * Registers a variant defined by `ini` and makes it the active variant.
+   *
+   * The configuration is written to the engine's in-memory filesystem and
+   * loaded through the `VariantPath` option, which is the only way to feed a
+   * variant definition to the WebAssembly build.
+   */
+  async setVariant(name: string, ini: string): Promise<void> {
+    await this.ensureStarted();
+    const path = "/variants.ini";
+    await this.writeFile(path, ini);
+    this.send(`setoption name VariantPath value ${path}`);
+    this.send(`setoption name UCI_Variant value ${name}`);
+  }
+
+  private writeFile(path: string, content: string): Promise<void> {
+    if (this.failure) return Promise.reject(this.failure);
+    return new Promise((resolve, reject) => {
+      this.fileWaiters.set(path, { resolve, reject });
+      this.worker.postMessage({ type: "writeFile", path, content });
+    });
+  }
+
   async bestMove(fen: string, movetimeMs: number): Promise<string> {
     await this.ensureStarted();
 
@@ -110,6 +156,8 @@ export class FairyStockfishEngine {
       this.waiters.delete(waiter);
       waiter.reject(error);
     }
+    for (const waiter of [...this.fileWaiters.values()]) waiter.reject(error);
+    this.fileWaiters.clear();
     this.errorListeners.clear();
   }
 }

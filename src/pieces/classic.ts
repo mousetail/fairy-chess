@@ -1,5 +1,5 @@
-import { pieceTypes, type ChessBoardState, type Piece } from "../chess-board";
-import { type PieceType } from "../chess-game";
+import { type ChessBoardState, type Piece } from "../chess-board";
+import pieceTypes, { type PieceType } from ".";
 import {
   jumpBehavior,
   moveBehavior,
@@ -11,12 +11,15 @@ import {
 const classicPieces = {
   pawn: {
     symbol: "p",
+    betza: "fmWfceF",
+    promotionAbility: "deny",
     image: getPieceImageAsync("classic", "pawn"),
     behavior: normalizeColor(pawnBehavior),
     value: 1,
   },
   rook: {
     symbol: "r",
+    betza: "R",
     image: getPieceImageAsync("classic", "rook"),
     value: 5,
     behavior: moveBehavior([
@@ -28,6 +31,7 @@ const classicPieces = {
   },
   knight: {
     symbol: "n",
+    betza: "N",
     image: getPieceImageAsync("classic", "knight"),
     value: 3,
     behavior: jumpBehavior([
@@ -43,6 +47,7 @@ const classicPieces = {
   },
   bishop: {
     symbol: "b",
+    betza: "B",
     image: getPieceImageAsync("classic", "bishop"),
     value: 3,
     behavior: moveBehavior([
@@ -54,6 +59,7 @@ const classicPieces = {
   },
   queen: {
     symbol: "q",
+    betza: "Q",
     image: getPieceImageAsync("classic", "queen"),
     value: 9,
     behavior: moveBehavior([
@@ -69,6 +75,8 @@ const classicPieces = {
   },
   king: {
     symbol: "k",
+    betza: "K",
+    promotionAbility: "deny",
     image: getPieceImageAsync("classic", "king"),
     value: 0,
     behavior: (piece: Piece, state: ChessBoardState) => {

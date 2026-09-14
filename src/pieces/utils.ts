@@ -1,11 +1,11 @@
 import {
-  pieceTypes,
   type ChessBoardState,
   type Piece,
   type SpecialMovement,
 } from "../chess-board";
 import type { Tile } from "../chess-tile";
 import images from "../images/images";
+import { getPromotionOptions } from "./promotion";
 
 export type Behavior = (
   piece: Piece,
@@ -21,6 +21,7 @@ export function normalizeColor(
     position: Tile,
     isOccupied: (tile: Tile) => boolean,
     isOccupiedByEnemy: (tile: Tile) => boolean,
+    state: ChessBoardState,
   ) => SpecialMovement[],
 ): Behavior {
   return (piece, state) => {
@@ -53,6 +54,7 @@ export function normalizeColor(
           false
         );
       },
+      state,
     );
     return moves.map((move): SpecialMovement => ({
       ...move,
@@ -127,6 +129,7 @@ export function pawnBehavior(
   position: Tile,
   isOccupied: (tile: Tile) => boolean,
   isOccupiedByEnemy: (tile: Tile) => boolean,
+  state: ChessBoardState,
 ): SpecialMovement[] {
   const moves: SpecialMovement[] = [];
   const direction = 1; // White moves up (increasing y)
@@ -172,18 +175,14 @@ export function pawnBehavior(
     }
   }
 
+  const promotionOptions = getPromotionOptions(state);
   return moves.map((move) =>
     move.to.y === 7
       ? {
           ...move,
           promotion: {
             state: "pending",
-            options: [
-              pieceTypes.queen,
-              pieceTypes.rook,
-              pieceTypes.bishop,
-              pieceTypes.knight,
-            ],
+            options: promotionOptions,
           },
         }
       : move,

@@ -1,6 +1,7 @@
 import type { ChessGame } from "../chess-game";
 import { FairyStockfishEngine } from "./engine";
 import { boardStateToFen, resolveUciMove, type ResolvedMove } from "./fen";
+import { buildVariantIni, VARIANT_NAME } from "./variant";
 
 export interface AiSettings {
   /** Minimum time, in milliseconds, before the AI plays its move. */
@@ -53,6 +54,9 @@ export class AiPlayer {
         "Skill Level",
         skillLevelForDifficulty(this.settings.difficulty),
       );
+      // Teach the engine the rules of the pieces on the board before it sees
+      // the position, since the variant is fixed for the whole game.
+      await this.engine.setVariant(VARIANT_NAME, buildVariantIni(game.state));
     }
 
     const fen = boardStateToFen(game.state, fullMoveNumber);

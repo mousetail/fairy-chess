@@ -3,6 +3,10 @@ declare module "fairy-stockfish-nnue.wasm/stockfish.js" {
     postMessage(command: string): void;
     addMessageListener(listener: (line: string) => void): void;
     removeMessageListener(listener: (line: string) => void): void;
+    /** Emscripten's in-memory filesystem, used to load variant configs. */
+    FS: {
+      writeFile(path: string, data: string): void;
+    };
     terminate(): void;
   }
 

@@ -4,7 +4,6 @@ import {
   isInCheck,
   movementHasNoPendingPromotion,
   movementHasPendingPromotion,
-  pieceTypes,
   specialMovementToPgn,
   type ChessBoardState,
   type Piece,
@@ -13,11 +12,11 @@ import {
 import {
   ChessGame,
   type GameStatus,
-  type PieceType,
   type Player,
 } from "../chess-game";
 import type { Tile } from "../chess-tile";
 import { HistoryBar } from "../history-bar";
+import { chaosLevels } from "../replacement-rules";
 import type { Screen } from "../screen";
 import { AiPlayer } from "../ai/ai-player";
 import { ArrowsLayer } from "./arrows-layer";
@@ -26,6 +25,8 @@ import { tileFromEvent } from "./board-geometry";
 import { getImageFromPromise } from "./piece-images";
 import { PieceDragController } from "./piece-drag-controller";
 import { createPromotionDialogue } from "./promotion-dialogue";
+import type { PieceType } from "../pieces";
+import pieceTypes from "../pieces";
 
 /** The pieces `mine` has that `theirs` does not, ordered from least to most valuable. */
 function surplusPieces(mine: Piece[], theirs: Piece[]): PieceType[] {
@@ -48,6 +49,8 @@ function surplusPieces(mine: Piece[], theirs: Piece[]): PieceType[] {
 export interface ChessScreenOptions {
   white?: Player;
   black?: Player;
+  /** Index into {@link chaosLevels} describing how many fairy pieces to add. */
+  chaosLevel?: number;
   onPlayAgain?: () => void;
 }
 
@@ -83,7 +86,8 @@ export default class ChessScreen implements Screen {
 
   constructor(options: ChessScreenOptions = {}) {
     this.options = options;
-    this.game = ChessGame.defaultLayout();
+    const chaos = chaosLevels[options.chaosLevel ?? 0] ?? chaosLevels[0];
+    this.game = ChessGame.defaultLayout(chaos);
     this.game.players = {
       white: options.white ?? { type: "human" },
       black: options.black ?? { type: "human" },
