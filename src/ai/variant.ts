@@ -1,5 +1,5 @@
 import type { ChessBoardState } from "../chess-board";
-import pieceTypes from "../pieces";
+import pieceTypes, { type PieceType } from "../pieces/piece_types";
 import { getPromotionOptions } from "../pieces/promotion";
 
 /**
@@ -30,6 +30,19 @@ const builtInTypes: Record<string, string> = {
 };
 
 /**
+ * The squares each colour's copy of a piece may move to, for pieces whose
+ * movement depends on which half of the board they stand on. The jumping pawns
+ * are split into a left and a right variant so that each has a fixed diagonal
+ * towards the centre; the region keeps each variant on its own side of the
+ * centre line. The regions are written in Fairy-Stockfish's bitboard syntax,
+ * where `a*` is a whole file.
+ */
+const mobilityRegions = new Map<PieceType, { white: string; black: string }>([
+  [pieceTypes.jumpingPawnLeft, { white: "a* b* c* d*", black: "e* f* g* h*" }],
+  [pieceTypes.jumpingPawnRight, { white: "e* f* g* h*", black: "a* b* c* d*" }],
+]);
+
+/**
  * Builds a Fairy-Stockfish variant configuration describing exactly the piece
  * types in play, so that pieces which are not on the board are not defined.
  *
@@ -42,11 +55,17 @@ export function buildVariantIni(state: ChessBoardState): string {
   for (const [type, symbol] of state.symbols) {
     const letter = symbol.toLowerCase();
     const builtIn = builtInTypes[type.betza];
-    lines.push(
-      builtIn
-        ? `${builtIn} = ${letter}`
-        : `customPiece${customIndex++} = ${letter}:${type.betza}`,
-    );
+    if (builtIn) {
+      lines.push(`${builtIn} = ${letter}`);
+      continue;
+    }
+    const index = customIndex++;
+    lines.push(`customPiece${index} = ${letter}:${type.betza}`);
+    const region = mobilityRegions.get(type);
+    if (region) {
+      lines.push(`mobilityRegionWhiteCustomPiece${index} = ${region.white}`);
+      lines.push(`mobilityRegionBlackCustomPiece${index} = ${region.black}`);
+    }
   }
 
   // Fairy-Stockfish only supports a single promotion set for the whole
@@ -59,13 +78,17 @@ export function buildVariantIni(state: ChessBoardState): string {
     lines.push(`promotionPieceTypes = ${letters}`);
   }
 
-  // A wall can only ever reach the promotion rank by capturing, but when it
-  // does it should promote like a pawn.
-  const wallSymbol = state.symbols.get(pieceTypes.wall);
-  if (wallSymbol) {
+  // Pieces that promote like a pawn (the pawn itself, the wall and the pawn
+  // variants) must be listed so the engine lets them promote on the far rank.
+  // The pawn is always listed first, as it is the main promotion pawn.
+  const extraPromoters = [...state.symbols].filter(
+    ([type]) => type.promotesLikePawn && type !== pieceTypes.pawn,
+  );
+  if (extraPromoters.length > 0) {
     const pawnSymbol = state.symbols.get(pieceTypes.pawn) ?? "p";
+    const symbols = [pawnSymbol, ...extraPromoters.map(([, symbol]) => symbol)];
     lines.push(
-      `promotionPawnTypes = ${pawnSymbol.toLowerCase()}${wallSymbol.toLowerCase()}`,
+      `promotionPawnTypes = ${symbols.map((s) => s.toLowerCase()).join("")}`,
     );
   }
 

@@ -83,7 +83,7 @@ export class HomeScreen implements Screen {
       this.sliderIndex(
         this.initialSettings?.difficulty,
         difficultyOptions.length,
-        3,
+        1,
       ),
     );
     difficultySlider.element.classList.add("difficulty");
@@ -108,7 +108,7 @@ export class HomeScreen implements Screen {
       this.sliderIndex(
         this.initialSettings?.chaosLevel,
         chaosOptions.length,
-        0,
+        2,
       ),
     );
     container.appendChild(chaosLevelSlider.element);

@@ -3,8 +3,8 @@ import {
   type ChessBoardState,
   type Piece,
 } from "./chess-board";
-import type { PieceType } from "./pieces";
-import pieceTypes from "./pieces";
+import type { PieceType } from "./pieces/piece_types";
+import pieceTypes from "./pieces/piece_types";
 
 type Color = Piece["color"];
 
@@ -86,6 +86,63 @@ function pawnRule(name: string, file: number, to: PieceType): ReplacementRule {
 }
 
 /**
+ * Builds a rule that converts every remaining pawn of a colour into `to`.
+ *
+ * Used for a piece that arrives as a whole squad rather than as a single
+ * specialist. Because the pawns are converted wholesale it deliberately ignores
+ * {@link maxCopiesPerPiece}, the same way a piece of type `pawn` is exempt.
+ */
+function pawnSquadRule(name: string, to: PieceType): ReplacementRule {
+  return {
+    name,
+    complexity: 8,
+    apply: (board, color) => {
+      const pawns = board.pieces.filter(
+        (candidate) =>
+          candidate.color === color && candidate.type === pieceTypes.pawn,
+      );
+      if (pawns.length === 0) return false;
+      for (const pawn of pawns) pawn.type = to;
+      return true;
+    },
+  };
+}
+
+/**
+ * Builds a rule that converts every pawn of a colour into one of two variants,
+ * depending on which half of the board it starts on. Used for the jumping
+ * pawns, whose two variants each stay on their own side of the centre line.
+ *
+ * Like {@link pawnSquadRule} it converts the whole corps, so it deliberately
+ * ignores {@link maxCopiesPerPiece}.
+ */
+function pawnSplitRule(
+  name: string,
+  left: PieceType,
+  right: PieceType,
+): ReplacementRule {
+  return {
+    name,
+    complexity: 8,
+    apply: (board, color) => {
+      const pawns = board.pieces.filter(
+        (candidate) =>
+          candidate.color === color && candidate.type === pieceTypes.pawn,
+      );
+      if (pawns.length === 0) return false;
+      for (const pawn of pawns) {
+        // A colour's left half is the board's right half for black, because the
+        // board is mirrored between the two sides.
+        const onLeft =
+          color === "white" ? pawn.position.x < 4 : pawn.position.x >= 4;
+        pawn.type = onLeft ? left : right;
+      }
+      return true;
+    },
+  };
+}
+
+/**
  * Every replacement currently available, each combining two single pieces into
  * the compound that moves like both. The king is never used as a source, since
  * it carries the check and castling rules.
@@ -99,7 +156,6 @@ export const replacementRules: ReplacementRule[] = [
   rule("Bishop → Ferz", pieceTypes.bishop, pieceTypes.ferz),
   rule("Knight → Knook", pieceTypes.knight, pieceTypes.knook),
   rule("Knight → Knishop", pieceTypes.knight, pieceTypes.knishop),
-  rule("Knight → Kniween", pieceTypes.knight, pieceTypes.kniween),
   rule("Knight → Kning", pieceTypes.knight, pieceTypes.kning),
   rule("Knight → Camel", pieceTypes.knight, pieceTypes.camel),
   rule("Knight → Zebra", pieceTypes.knight, pieceTypes.zebra),
@@ -110,6 +166,16 @@ export const replacementRules: ReplacementRule[] = [
   rule("Queen → Pylon", pieceTypes.queen, pieceTypes.pylon),
   pawnRule("c-pawn → Wall", 2, pieceTypes.wall),
   pawnRule("f-pawn → Wall", 5, pieceTypes.wall),
+  pawnSquadRule("Pawns → Antipawns", pieceTypes.antipawn),
+  pawnSquadRule("Pawns → Commoners", pieceTypes.commoner),
+  pawnSplitRule(
+    "Pawns → Jumping Pawns",
+    pieceTypes.jumpingPawnLeft,
+    pieceTypes.jumpingPawnRight,
+  ),
+  pawnSquadRule("Pawns → Torpedoes", pieceTypes.torpedo),
+  pawnSquadRule("Pawns → Sentries", pieceTypes.sentry),
+  // pawnSquadRule("Pawns → Pseudocheckers", pieceTypes.pseudocheckers),
 ];
 
 /** A setting on the home screen's chaos slider. */

@@ -1,4 +1,4 @@
-import { type ChessBoardState, type Piece } from "../chess-board";
+import { type ChessBoardState, type Piece } from "../../chess-board";
 import pieceTypes, { type PieceType } from ".";
 import {
   jumpBehavior,
@@ -6,13 +6,14 @@ import {
   pawnBehavior,
   normalizeColor,
   getPieceImageAsync,
-} from "./utils";
+} from "../utils";
 
 const classicPieces = {
   pawn: {
     symbol: "p",
     betza: "fmWfceF",
     promotionAbility: "deny",
+    promotesLikePawn: true,
     image: getPieceImageAsync("classic", "pawn"),
     behavior: normalizeColor(pawnBehavior),
     value: 1,

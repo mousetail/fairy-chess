@@ -1,4 +1,4 @@
-import type { PieceType } from "./pieces";
+import type { PieceType } from "./pieces/piece_types";
 import { parseDiagram, type DiagramTile } from "./pieces/diagram";
 import { getImageFromPromise } from "./chess-screen/piece-images";
 

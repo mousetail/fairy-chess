@@ -1,12 +1,11 @@
-import { type SpecialMovement } from "../chess-board";
+import { type SpecialMovement } from "../../chess-board";
 import { type PieceType } from ".";
-import { getPromotionOptions } from "./promotion";
 import {
   getPieceImageAsync,
   jumpBehavior,
   moveBehavior,
   type Behavior,
-} from "./utils";
+} from "../utils";
 
 const knightDirections = [
   { x: -2, y: -1 },
@@ -17,17 +16,6 @@ const knightDirections = [
   { x: -1, y: 2 },
   { x: 1, y: -2 },
   { x: 1, y: 2 },
-];
-
-const kingDirections = [
-  { x: 1, y: 0 },
-  { x: -1, y: 0 },
-  { x: 0, y: 1 },
-  { x: 0, y: -1 },
-  { x: 1, y: 1 },
-  { x: 1, y: -1 },
-  { x: -1, y: 1 },
-  { x: -1, y: -1 },
 ];
 
 const queenDirections = [
@@ -41,26 +29,7 @@ const queenDirections = [
   { x: -1, y: -1 },
 ];
 
-const kingJumps = jumpBehavior(kingDirections);
 const queenRider = moveBehavior(queenDirections);
-
-/**
- * Captures an adjacent enemy piece like a king, but never moves. A capture that
- * lands on the far rank promotes, so a wall that fights its way to the top can
- * still become a real piece.
- */
-const wallBehavior: Behavior = (piece, state) => {
-  const captures = kingJumps(piece, state).filter(
-    (move) => move.type === "capture",
-  );
-  const lastRank = piece.color === "white" ? 7 : 0;
-  const promotionOptions = getPromotionOptions(state);
-  return captures.map((move) =>
-    move.to.y === lastRank
-      ? { ...move, promotion: { state: "pending", options: promotionOptions } }
-      : move,
-  );
-};
 
 /** A rider along the knight's directions, i.e. a nightrider. */
 const nightriderBehavior = moveBehavior(knightDirections);
@@ -83,23 +52,67 @@ const pylonBehavior: Behavior = (piece, state) => {
   return [...moves, ...captures];
 };
 
+const diagonalSteps = [
+  { x: 1, y: 1 },
+  { x: 1, y: -1 },
+  { x: -1, y: 1 },
+  { x: -1, y: -1 },
+];
+
+/**
+ * A checkers tile. It steps one square diagonally, and it can jump a piece and
+ * land on the square immediately beyond it; it captures whatever it lands on,
+ * not the piece it jumps over. The jumped piece may be friend or foe. This is a
+ * diagonal grasshopper, because Fairy-Stockfish cannot require the jumped piece
+ * to be adjacent, so the hop clears the first piece on the diagonal however far
+ * away it stands. Recorded as `mFgB` (fers plus a diagonal grasshopper).
+ */
+// const pseudocheckersBehavior: Behavior = (piece, state) => {
+//   const pieces = state.pieces;
+//   const pieceAt = (x: number, y: number) =>
+//     pieces.find((p) => p.position.x === x && p.position.y === y);
+//   const moves = jumpBehavior(diagonalSteps)(piece, state).filter(
+//     (move) => move.type === "move",
+//   );
+//   for (const dir of diagonalSteps) {
+//     let x = piece.position.x + dir.x;
+//     let y = piece.position.y + dir.y;
+//     // Find the first piece on this diagonal; that is the one to jump.
+//     while (x >= 0 && x < 8 && y >= 0 && y < 8 && !pieceAt(x, y)) {
+//       x += dir.x;
+//       y += dir.y;
+//     }
+//     const landing = { x: x + dir.x, y: y + dir.y };
+//     if (landing.x < 0 || landing.x > 7 || landing.y < 0 || landing.y > 7) {
+//       continue;
+//     }
+//     const target = pieceAt(landing.x, landing.y);
+//     if (!target) {
+//       moves.push({ to: landing, type: "move" });
+//     } else if (target.color !== piece.color) {
+//       moves.push({ to: landing, type: "capture" });
+//     }
+//   }
+//   return moves;
+// };
+
 /**
  * The basic fairy chess pieces. The leapers move a fixed distance and jump, so
  * they can never be blocked; the riders slide along their directions.
  *
  * Symbols follow the Fairy-Stockfish letters for their movement patterns where
  * one exists, and are otherwise free letters:
- *   wazir   = w
- *   ferz    = f
- *   camel   = c (chancellor also uses c; the per-game symbol map disambiguates)
- *   zebra   = z
- *   wall    = x
- *   unicorn = u
- *   pylon   = y
+ *   wazir          = w
+ *   ferz           = f
+ *   camel          = c (chancellor also uses c; the per-game symbol map disambiguates)
+ *   zebra          = z
+ *   unicorn        = u
+ *   pylon          = y
+ *   pseudocheckers = o (fers + diagonal grasshopper has no standard letter, so o is a free one)
  *
  * The wazir and ferz are promotion priorities: a game that fields one of them
  * offers only that piece (or, when both are in play, the two of them) as
- * promotion targets. The wall is immobile, so it is never a promotion target.
+ * promotion targets.
  */
 const fairyPieces = {
   wazir: {
@@ -202,20 +215,6 @@ const fairyPieces = {
       { x: -3, y: -2 },
     ]),
   },
-  wall: {
-    symbol: "x",
-    betza: "cK",
-    promotionAbility: "deny",
-    image: getPieceImageAsync("geometry", "square"),
-    value: 1,
-    displayName: "Wall",
-    description: "Cannot move; captures any adjacent enemy piece.",
-    diagram: {
-      size: 5,
-      rows: [".....", ".ccc.", ".coc.", ".ccc.", "....."],
-    },
-    behavior: wallBehavior,
-  },
   unicorn: {
     symbol: "u",
     betza: "NN",
@@ -251,6 +250,21 @@ const fairyPieces = {
     },
     behavior: pylonBehavior,
   },
+  // pseudocheckers: {
+  //   symbol: "o",
+  //   betza: "mFgB",
+  //   image: getPieceImageAsync("geometry", "circle"),
+  //   value: 2,
+  //   displayName: "Pseudocheckers Tile",
+  //   aliases: ["Checkers Tile"],
+  //   description:
+  //     "Steps one square diagonally; jumps a piece to move or capture just beyond it.",
+  //   diagram: {
+  //     size: 5,
+  //     rows: ["x...x", ".x.x.", "..o..", ".x.x.", "x...x"],
+  //   },
+  //   behavior: pseudocheckersBehavior,
+  // },
 } satisfies Record<string, PieceType>;
 
 export default fairyPieces;

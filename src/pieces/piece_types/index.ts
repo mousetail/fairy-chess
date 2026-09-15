@@ -1,9 +1,10 @@
 import classicPieces from "./classic";
 import combinationPieces from "./combinations";
 import fairyPieces from "./fairy";
+import pawnPieces from "./pawns";
 
-import type { PieceDiagram } from "./diagram";
-import type { Behavior, LazyImage } from "./utils";
+import type { PieceDiagram } from "../diagram";
+import type { Behavior, LazyImage } from "../utils";
 
 export interface PieceType {
   image: LazyImage;
@@ -41,6 +42,12 @@ export interface PieceType {
    * the only promotion target whenever it is one of the pieces in play.
    */
   promotionAbility?: "allow" | "deny" | "priority";
+  /**
+   * Whether the piece promotes on the far rank like a pawn. The piece's own
+   * behavior attaches the promotion options; this flag tells the engine which
+   * piece types may promote (see `promotionPawnTypes` in `ai/variant.ts`).
+   */
+  promotesLikePawn?: boolean;
   /** Approximate point value, in pawns, used to compare material. */
   value: number;
 }
@@ -49,6 +56,7 @@ const pieceTypes = {
   ...classicPieces,
   ...fairyPieces,
   ...combinationPieces,
+  ...pawnPieces,
 } satisfies Record<string, PieceType>;
 
 export default pieceTypes;

@@ -6,8 +6,8 @@ import {
   type SpecialMovement,
 } from "../chess-board";
 import type { ChessGame } from "../chess-game";
-import type { PieceType } from "../pieces";
-import pieceTypes from "../pieces";
+import type { PieceType } from "../pieces/piece_types";
+import pieceTypes from "../pieces/piece_types";
 
 const FILES = "abcdefgh";
 

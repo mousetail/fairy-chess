@@ -1,5 +1,5 @@
 import type { Piece, SpecialMovement } from "../chess-board";
-import type { PieceType } from "../pieces";
+import type { PieceType } from "../pieces/piece_types";
 import { getImageFromPromise } from "./piece-images";
 
 /** Shows the promotion choices over the board and reports the chosen piece. */

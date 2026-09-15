@@ -48,28 +48,35 @@ export class AiPlayer {
     game: ChessGame,
     fullMoveNumber: number,
   ): Promise<ResolvedMove> {
-    if (!this.configured) {
-      this.configured = true;
-      await this.engine.setOption(
-        "Skill Level",
-        skillLevelForDifficulty(this.settings.difficulty),
+    try {
+      if (!this.configured) {
+        await this.engine.setOption(
+          "Skill Level",
+          skillLevelForDifficulty(this.settings.difficulty),
+        );
+        // Teach the engine the rules of the pieces on the board before it sees
+        // the position, since the variant is fixed for the whole game.
+        await this.engine.setVariant(VARIANT_NAME, buildVariantIni(game.state));
+        // Only mark the engine as configured once setup has actually
+        // succeeded, so a failed attempt is retried on the next move.
+        this.configured = true;
+      }
+
+      const fen = boardStateToFen(game.state, fullMoveNumber);
+      const movetimeMs = Math.max(1, this.settings.minTurnTimeMs);
+      const bestMove = this.engine.bestMove(fen, movetimeMs);
+      // Keep the AI from replying instantly so the game feels more natural.
+      const minimumDelay = new Promise<void>((resolve) =>
+        setTimeout(resolve, this.settings.minTurnTimeMs),
       );
-      // Teach the engine the rules of the pieces on the board before it sees
-      // the position, since the variant is fixed for the whole game.
-      await this.engine.setVariant(VARIANT_NAME, buildVariantIni(game.state));
+
+      const uci = await bestMove;
+      await minimumDelay;
+      return resolveUciMove(game, uci);
+    } catch (error) {
+      console.error("AI player failed to choose a move:", error);
+      throw error;
     }
-
-    const fen = boardStateToFen(game.state, fullMoveNumber);
-    const movetimeMs = Math.max(1, this.settings.minTurnTimeMs);
-    const bestMove = this.engine.bestMove(fen, movetimeMs);
-    // Keep the AI from replying instantly so the game feels more natural.
-    const minimumDelay = new Promise<void>((resolve) =>
-      setTimeout(resolve, this.settings.minTurnTimeMs),
-    );
-
-    const uci = await bestMove;
-    await minimumDelay;
-    return resolveUciMove(game, uci);
   }
 
   dispose(): void {

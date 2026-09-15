@@ -22,8 +22,8 @@ import { tileFromEvent } from "./board-geometry";
 import { getImageFromPromise } from "./piece-images";
 import { PieceDragController } from "./piece-drag-controller";
 import { createPromotionDialogue } from "./promotion-dialogue";
-import type { PieceType } from "../pieces";
-import pieceTypes from "../pieces";
+import type { PieceType } from "../pieces/piece_types";
+import pieceTypes from "../pieces/piece_types";
 
 /** The pieces `mine` has that `theirs` does not, ordered from least to most valuable. */
 function surplusPieces(mine: Piece[], theirs: Piece[]): PieceType[] {
@@ -114,6 +114,7 @@ export default class ChessScreen implements Screen {
       });
       this.aiPlayer.onError((message) => {
         this.aiError = message;
+        console.error("Fairy Stockfish failed to start:", message);
         alert(`Fairy Stockfish failed to start: ${message}`);
       });
     }
@@ -437,8 +438,13 @@ export default class ChessScreen implements Screen {
   };
 
   private maybeRunAi(): void {
-    if (!this.aiPlayer || this.aiError || this.gameEnded || this.disposed)
+    if (!this.aiPlayer || this.gameEnded || this.disposed) return;
+    if (this.aiError) {
+      console.warn(
+        `AI will not move because the engine previously failed: ${this.aiError}`,
+      );
       return;
+    }
     if (!this.historyBar?.isAtPresent()) return;
     const turn = this.game.state.turn;
     if (this.game.players[turn].type !== "ai") return;
@@ -461,6 +467,7 @@ export default class ChessScreen implements Screen {
     } catch (error) {
       if (this.disposed) return;
       this.aiError = error instanceof Error ? error.message : String(error);
+      console.error("Fairy Stockfish failed to play a move:", error);
       alert(`Fairy Stockfish failed: ${this.aiError}`);
     } finally {
       this.aiThinking = false;

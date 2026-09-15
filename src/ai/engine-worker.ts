@@ -56,9 +56,11 @@ workerScope.addEventListener("message", (event: MessageEvent) => {
     })
     .catch((error: unknown) => {
       enginePromise = null;
+      const message = error instanceof Error ? error.message : String(error);
+      console.error("Fairy Stockfish worker failed:", error);
       workerScope.postMessage({
         type: "error",
-        message: error instanceof Error ? error.message : String(error),
+        message,
       });
     });
 });

@@ -9,7 +9,7 @@ import {
   type TaggedMove,
 } from "./chess-board";
 import type { Tile } from "./chess-tile";
-import pieceTypes, { type PieceType } from "./pieces";
+import pieceTypes, { type PieceType } from "./pieces/piece_types";
 import { applyChaos, chaosLevels, type ChaosLevel } from "./replacement-rules";
 
 /**

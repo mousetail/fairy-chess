@@ -1,11 +1,11 @@
-import { type ChessBoardState, type Piece } from "../chess-board";
+import { type ChessBoardState, type Piece } from "../../chess-board";
 import { type PieceType } from ".";
 import {
   getPieceImageAsync,
   jumpBehavior,
   moveBehavior,
   type Behavior,
-} from "./utils";
+} from "../utils";
 
 /** A piece that may use the moves of every one of the given behaviors. */
 function combine(...behaviors: Behavior[]): Behavior {

@@ -1,6 +1,6 @@
 import { tileToAlgebraic, type Tile } from "./chess-tile";
-import type { PieceType } from "./pieces";
-import pieceTypes from "./pieces";
+import type { PieceType } from "./pieces/piece_types";
+import pieceTypes from "./pieces/piece_types";
 
 export type SpecialMovement = {
   to: Tile;
