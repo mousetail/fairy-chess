@@ -1,6 +1,6 @@
-import type { ChessBoardState } from "../chess-board";
-import pieceTypes, { type PieceType } from "../pieces/piece_types";
-import { getPromotionOptions } from "../pieces/promotion";
+import type { ChessBoardState } from "../chess-board.ts";
+import pieceTypes from "../pieces/piece_types/index.ts";
+import { getPromotionOptions } from "../pieces/promotion.ts";
 
 /**
  * The name the generated variant is registered under in Fairy-Stockfish.
@@ -29,25 +29,19 @@ const builtInTypes: Record<string, string> = {
   KN: "centaur",
 };
 
-/**
- * The squares each colour's copy of a piece may move to, for pieces whose
- * movement depends on which half of the board they stand on. The jumping pawns
- * are split into a left and a right variant so that each has a fixed diagonal
- * towards the centre; the region keeps each variant on its own side of the
- * centre line. The regions are written in Fairy-Stockfish's bitboard syntax,
- * where `a*` is a whole file.
- */
-const mobilityRegions = new Map<PieceType, { white: string; black: string }>([
-  [pieceTypes.jumpingPawnLeft, { white: "a* b* c* d*", black: "e* f* g* h*" }],
-  [pieceTypes.jumpingPawnRight, { white: "e* f* g* h*", black: "a* b* c* d*" }],
-]);
+function capitalize(value: string): string {
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
 
 /**
  * Builds a Fairy-Stockfish variant configuration describing exactly the piece
  * types in play, so that pieces which are not on the board are not defined.
  *
  * The symbols come from the game's resolved symbol map, which gives pieces
- * sharing a standard symbol distinct fallback letters.
+ * sharing a standard symbol distinct fallback letters. Every rule that is not
+ * part of the Betza notation (the movement area, castling, en passant and
+ * promotion) is read from the piece definitions, so the engine and our own move
+ * generation always agree.
  */
 export function buildVariantIni(state: ChessBoardState): string {
   const lines = [`[${VARIANT_NAME}]`];
@@ -55,16 +49,22 @@ export function buildVariantIni(state: ChessBoardState): string {
   for (const [type, symbol] of state.symbols) {
     const letter = symbol.toLowerCase();
     const builtIn = builtInTypes[type.betza];
+    let pieceName: string;
     if (builtIn) {
       lines.push(`${builtIn} = ${letter}`);
-      continue;
+      pieceName = capitalize(builtIn);
+    } else {
+      const index = customIndex++;
+      lines.push(`customPiece${index} = ${letter}:${type.betza}`);
+      pieceName = `CustomPiece${index}`;
     }
-    const index = customIndex++;
-    lines.push(`customPiece${index} = ${letter}:${type.betza}`);
-    const region = mobilityRegions.get(type);
-    if (region) {
-      lines.push(`mobilityRegionWhiteCustomPiece${index} = ${region.white}`);
-      lines.push(`mobilityRegionBlackCustomPiece${index} = ${region.black}`);
+    if (type.mobilityRegion) {
+      lines.push(
+        `mobilityRegionWhite${pieceName} = ${type.mobilityRegion.white}`,
+      );
+      lines.push(
+        `mobilityRegionBlack${pieceName} = ${type.mobilityRegion.black}`,
+      );
     }
   }
 
@@ -80,17 +80,36 @@ export function buildVariantIni(state: ChessBoardState): string {
 
   // Pieces that promote like a pawn (the pawn itself, the wall and the pawn
   // variants) must be listed so the engine lets them promote on the far rank.
-  // The pawn is always listed first, as it is the main promotion pawn.
-  const extraPromoters = [...state.symbols].filter(
-    ([type]) => type.promotesLikePawn && type !== pieceTypes.pawn,
-  );
+  // The pawn is listed first when it is in play, as it is the main promotion
+  // pawn.
+  const promoters = [...state.symbols].filter(([type]) => type.promotesLikePawn);
+  const pawn = promoters.find(([type]) => type === pieceTypes.pawn);
+  const extraPromoters = promoters.filter(([type]) => type !== pieceTypes.pawn);
   if (extraPromoters.length > 0) {
-    const pawnSymbol = state.symbols.get(pieceTypes.pawn) ?? "p";
-    const symbols = [pawnSymbol, ...extraPromoters.map(([, symbol]) => symbol)];
+    const ordered = pawn ? [pawn, ...extraPromoters] : extraPromoters;
     lines.push(
-      `promotionPawnTypes = ${symbols.map((s) => s.toLowerCase()).join("")}`,
+      `promotionPawnTypes = ${ordered
+        .map(([, symbol]) => symbol.toLowerCase())
+        .join("")}`,
     );
   }
+
+  // Pieces that may be captured en passant. The engine otherwise defaults to
+  // the pawn, which is only correct when the pawn is in play.
+  const enPassantTypes = [...state.symbols].filter(
+    ([type]) => type.canEnPassant,
+  );
+  if (enPassantTypes.length > 0) {
+    lines.push(
+      `enPassantTypes = ${enPassantTypes
+        .map(([, symbol]) => symbol.toLowerCase())
+        .join("")}`,
+    );
+  }
+
+  // Castling is only possible when a piece that may castle is in play.
+  const canCastle = [...state.symbols.keys()].some((type) => type.canCastle);
+  lines.push(`castling = ${canCastle}`);
 
   return lines.join("\n");
 }

@@ -1,4 +1,4 @@
-import { HomeScreen } from "./home-screen";
+import { HomeScreen } from "./home-screen.ts";
 
 const app = document.getElementById("app")!;
 

@@ -1,6 +1,6 @@
-import type { Piece, SpecialMovement, TaggedMove } from "../chess-board";
-import type { Tile } from "../chess-tile";
-import { getImageFromPromise } from "./piece-images";
+import type { Piece, SpecialMovement, TaggedMove } from "../chess-board.ts";
+import type { Tile } from "../chess-tile.ts";
+import { getImageFromPromise } from "./piece-images.ts";
 
 export interface BoardHandlers {
   onTileClick(tile: Tile): void;

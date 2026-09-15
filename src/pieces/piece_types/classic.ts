@@ -1,12 +1,5 @@
-import { type ChessBoardState, type Piece } from "../../chess-board";
-import pieceTypes, { type PieceType } from ".";
-import {
-  jumpBehavior,
-  moveBehavior,
-  pawnBehavior,
-  normalizeColor,
-  getPieceImageAsync,
-} from "../utils";
+import { type PieceType } from "./index.ts";
+import { getPieceImageAsync } from "../utils.ts";
 
 const classicPieces = {
   pawn: {
@@ -14,8 +7,8 @@ const classicPieces = {
     betza: "fmWfceF",
     promotionAbility: "deny",
     promotesLikePawn: true,
+    canEnPassant: true,
     image: getPieceImageAsync("classic", "pawn"),
-    behavior: normalizeColor(pawnBehavior),
     value: 1,
     displayName: "Pawn",
     description: "Moves 1 or 2 squares forward; captures diagonally.",
@@ -35,12 +28,6 @@ const classicPieces = {
       size: 5,
       rows: ["..x..", "..x..", "xxoxx", "..x..", "..x.."],
     },
-    behavior: moveBehavior([
-      { x: -1, y: 0 },
-      { x: 1, y: 0 },
-      { x: 0, y: -1 },
-      { x: 0, y: 1 },
-    ]),
   },
   knight: {
     symbol: "n",
@@ -53,16 +40,6 @@ const classicPieces = {
       size: 5,
       rows: [".x.x.", "x...x", "..o..", "x...x", ".x.x."],
     },
-    behavior: jumpBehavior([
-      { x: -2, y: -1 },
-      { x: -2, y: 1 },
-      { x: 2, y: -1 },
-      { x: 2, y: 1 },
-      { x: -1, y: -2 },
-      { x: -1, y: 2 },
-      { x: 1, y: -2 },
-      { x: 1, y: 2 },
-    ]),
   },
   bishop: {
     symbol: "b",
@@ -75,12 +52,6 @@ const classicPieces = {
       size: 5,
       rows: ["x...x", ".x.x.", "..o..", ".x.x.", "x...x"],
     },
-    behavior: moveBehavior([
-      { x: 1, y: 1 },
-      { x: 1, y: -1 },
-      { x: -1, y: 1 },
-      { x: -1, y: -1 },
-    ]),
   },
   queen: {
     symbol: "q",
@@ -93,21 +64,12 @@ const classicPieces = {
       size: 5,
       rows: ["x.x.x", ".xxx.", "xxoxx", ".xxx.", "x.x.x"],
     },
-    behavior: moveBehavior([
-      { x: 1, y: 0 },
-      { x: -1, y: 0 },
-      { x: 0, y: 1 },
-      { x: 0, y: -1 },
-      { x: 1, y: 1 },
-      { x: 1, y: -1 },
-      { x: -1, y: 1 },
-      { x: -1, y: -1 },
-    ]),
   },
   king: {
     symbol: "k",
     betza: "K",
     promotionAbility: "deny",
+    canCastle: true,
     image: getPieceImageAsync("classic", "king"),
     value: 0,
     displayName: "King",
@@ -115,74 +77,6 @@ const classicPieces = {
     diagram: {
       size: 5,
       rows: [".....", ".xxx.", ".xox.", ".xxx.", "....."],
-    },
-    behavior: (piece: Piece, state: ChessBoardState) => {
-      const board = state.pieces;
-      const moves = jumpBehavior([
-        { x: 1, y: 0 },
-        { x: -1, y: 0 },
-        { x: 0, y: 1 },
-        { x: 0, y: -1 },
-        { x: 1, y: 1 },
-        { x: 1, y: -1 },
-        { x: -1, y: 1 },
-        { x: -1, y: -1 },
-      ])(piece, state);
-      if (piece.hasMoved) return moves;
-      const row = piece.position.y;
-      const color = piece.color;
-      for (const dir of [-1, 1]) {
-        let x = piece.position.x + dir;
-        while (x >= 0 && x < 8) {
-          const p = board.find(
-            (b) => b.position.x === x && b.position.y === row,
-          );
-          if (
-            p &&
-            p.type === pieceTypes.rook &&
-            p.color === color &&
-            !p.hasMoved
-          ) {
-            // check empty between
-            let clear = true;
-            for (let cx = piece.position.x + dir; cx !== x; cx += dir) {
-              if (
-                board.find((b) => b.position.x === cx && b.position.y === row)
-              ) {
-                clear = false;
-                break;
-              }
-            }
-            if (clear) {
-              moves.push({
-                type: "move",
-                to: {
-                  x:
-                    x > piece.position.x
-                      ? piece.position.x + 2
-                      : piece.position.x - 2,
-                  y: row,
-                },
-                castling: {
-                  piece: p,
-                  destination: {
-                    x:
-                      x > piece.position.x
-                        ? piece.position.x + 1
-                        : piece.position.x - 1,
-                    y: row,
-                  },
-                },
-              });
-            }
-            break;
-          }
-          if (p) break;
-          x += dir;
-        }
-      }
-
-      return moves;
     },
   },
 } satisfies Record<string, PieceType>;

@@ -1,4 +1,4 @@
-import type { ChessBoardState } from "./chess-board";
+import type { ChessBoardState } from "./chess-board.ts";
 import backIcon from "./assets/back.svg";
 import forwardIcon from "./assets/forward.svg";
 import toStartIcon from "./assets/to-start.svg";

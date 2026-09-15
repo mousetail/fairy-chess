@@ -2,9 +2,9 @@ import {
   cloneChessBoardState,
   type ChessBoardState,
   type Piece,
-} from "./chess-board";
-import type { PieceType } from "./pieces/piece_types";
-import pieceTypes from "./pieces/piece_types";
+} from "./chess-board.ts";
+import type { PieceType } from "./pieces/piece_types/index.ts";
+import pieceTypes from "./pieces/piece_types/index.ts";
 
 type Color = Piece["color"];
 

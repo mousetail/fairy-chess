@@ -1,5 +1,5 @@
-import type { PieceImage } from "../images/images";
-import type { LazyImage } from "../pieces/utils";
+import type { PieceImage } from "../images/images.ts";
+import type { LazyImage } from "../pieces/utils.ts";
 
 /** Creates an <img> for a (possibly still loading) piece image. */
 export function getImageFromPromise(

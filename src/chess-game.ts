@@ -7,10 +7,10 @@ import {
   type Piece,
   type SpecialMovement,
   type TaggedMove,
-} from "./chess-board";
-import type { Tile } from "./chess-tile";
-import pieceTypes, { type PieceType } from "./pieces/piece_types";
-import { applyChaos, chaosLevels, type ChaosLevel } from "./replacement-rules";
+} from "./chess-board.ts";
+import type { Tile } from "./chess-tile.ts";
+import pieceTypes, { type PieceType } from "./pieces/piece_types/index.ts";
+import { applyChaos, chaosLevels, type ChaosLevel } from "./replacement-rules.ts";
 
 /**
  * Assigns each piece type a unique symbol, preferring its standard `symbol` and

@@ -1,14 +1,13 @@
-import classicPieces from "./classic";
-import combinationPieces from "./combinations";
-import fairyPieces from "./fairy";
-import pawnPieces from "./pawns";
+import classicPieces from "./classic.ts";
+import combinationPieces from "./combinations.ts";
+import fairyPieces from "./fairy.ts";
+import pawnPieces from "./pawns.ts";
 
-import type { PieceDiagram } from "../diagram";
-import type { Behavior, LazyImage } from "../utils";
+import type { PieceDiagram } from "../diagram.ts";
+import type { LazyImage } from "../utils.ts";
 
 export interface PieceType {
   image: LazyImage;
-  canEnPassant?: boolean;
   /** Human-readable name shown in the piece info panel. */
   displayName: string;
   /** Other names this piece is known by, shown under the display name. */
@@ -18,12 +17,13 @@ export interface PieceType {
   /** A hand-drawn picture of the piece's movement pattern. */
   diagram: PieceDiagram;
 
-  behavior: Behavior;
   /**
-   * Movement rules in Betza notation, used to describe the piece to the
-   * Fairy-Stockfish engine. See https://www.gnu.org/software/xboard/Betza.html
-   * for the syntax and the list of the engine's built-in piece types in
-   * `Fairy-Stockfish/src/variants.ini` for the notation of each atom.
+   * Movement rules in Betza notation. This is the single source of truth for
+   * how the piece moves: {@link getBehavior} parses it for our own move
+   * generation, and `ai/variant.ts` passes it to Fairy-Stockfish. See
+   * https://www.gnu.org/software/xboard/Betza.html for the syntax and the list
+   * of the engine's built-in piece types in `Fairy-Stockfish/src/variants.ini`
+   * for the notation of each atom.
    */
   betza: string;
   /**
@@ -35,6 +35,24 @@ export interface PieceType {
   /** Symbols to fall back to when `symbol` is already taken by another piece in play. */
   fallbackSymbols?: string[];
   /**
+   * The squares this piece may move to, per colour, written in
+   * Fairy-Stockfish's bitboard syntax (e.g. `a* b* c* d*` for the four left
+   * files). Used to restrict our own move generation and to tell the engine
+   * through `mobilityRegion*`.
+   */
+  mobilityRegion?: { white: string; black: string };
+  /**
+   * Whether this piece may castle with a rook like a king. Our move generation
+   * adds the castling moves and `ai/variant.ts` enables castling for the engine.
+   */
+  canCastle?: boolean;
+  /**
+   * Whether this piece makes a two-square first move and may be captured en
+   * passant, like a pawn. Our move generation adds the double step and
+   * `ai/variant.ts` lists the piece in the engine's `enPassantTypes`.
+   */
+  canEnPassant?: boolean;
+  /**
    * Whether this piece may be promoted to. Defaults to `"allow"`.
    *
    * `"deny"` keeps the piece out of the promotion options altogether (for
@@ -43,9 +61,9 @@ export interface PieceType {
    */
   promotionAbility?: "allow" | "deny" | "priority";
   /**
-   * Whether the piece promotes on the far rank like a pawn. The piece's own
-   * behavior attaches the promotion options; this flag tells the engine which
-   * piece types may promote (see `promotionPawnTypes` in `ai/variant.ts`).
+   * Whether the piece promotes on the far rank like a pawn. Our move generation
+   * attaches the promotion options to moves that reach the far rank, and
+   * `ai/variant.ts` lists the piece in the engine's `promotionPawnTypes`.
    */
   promotesLikePawn?: boolean;
   /** Approximate point value, in pawns, used to compare material. */

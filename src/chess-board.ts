@@ -1,6 +1,7 @@
-import { tileToAlgebraic, type Tile } from "./chess-tile";
-import type { PieceType } from "./pieces/piece_types";
-import pieceTypes from "./pieces/piece_types";
+import { tileToAlgebraic, type Tile } from "./chess-tile.ts";
+import { getBehavior } from "./pieces/behavior.ts";
+import type { PieceType } from "./pieces/piece_types/index.ts";
+import pieceTypes from "./pieces/piece_types/index.ts";
 
 export type SpecialMovement = {
   to: Tile;
@@ -23,9 +24,9 @@ export function specialMovementToPgn(
       p.type === m.piece.type && p.color === m.piece.color && p !== m.piece,
   );
   const ambiguous = sameType.filter((p) =>
-    p.type
-      .behavior(p, state)
-      .some((move) => move.to.x === m.to.x && move.to.y === m.to.y),
+    getBehavior(p.type)(p, state).some(
+      (move) => move.to.x === m.to.x && move.to.y === m.to.y,
+    ),
   );
   let disamb = "";
   if (ambiguous.length > 0) {
@@ -122,14 +123,12 @@ export function isInCheck(
   if (!king) return false;
   return board.pieces.some((enemy) => {
     if (enemy.color === king.color) return false;
-    return enemy.type
-      .behavior(enemy, board)
-      .some(
-        (m) =>
-          m.type === "capture" &&
-          m.to.x === king.position.x &&
-          m.to.y === king.position.y,
-      );
+    return getBehavior(enemy.type)(enemy, board).some(
+      (m) =>
+        m.type === "capture" &&
+        m.to.x === king.position.x &&
+        m.to.y === king.position.y,
+    );
   });
 }
 
@@ -153,7 +152,7 @@ export function getValidMoves(
   piece: Piece,
   board: ChessBoardState,
 ): SpecialMovement[] {
-  const moves = piece.type.behavior(piece, board);
+  const moves = getBehavior(piece.type)(piece, board);
   return moves.filter((move) => {
     const moveWithPromotion = {
       ...move,
@@ -163,7 +162,24 @@ export function getValidMoves(
     };
 
     const simulated = simulateMove(board, moveWithPromotion);
-    return !isInCheck(piece.color, simulated);
+    if (isInCheck(piece.color, simulated)) return false;
+
+    // A king may not castle out of, or through, check either.
+    if (move.castling) {
+      if (isInCheck(piece.color, board)) return false;
+      const between = {
+        x: (piece.position.x + move.to.x) / 2,
+        y: piece.position.y,
+      };
+      const passed = simulateMove(board, {
+        ...moveWithPromotion,
+        to: between,
+        castling: undefined,
+      });
+      if (isInCheck(piece.color, passed)) return false;
+    }
+
+    return true;
   });
 }
 

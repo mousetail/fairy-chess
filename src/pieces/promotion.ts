@@ -1,5 +1,5 @@
-import type { ChessBoardState } from "../chess-board";
-import type { PieceType } from "./piece_types";
+import type { ChessBoardState } from "../chess-board.ts";
+import type { PieceType } from "./piece_types/index.ts";
 
 /**
  * The piece types a pawn may promote to in the given position.

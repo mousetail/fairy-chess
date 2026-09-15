@@ -1,56 +1,5 @@
-import { type SpecialMovement } from "../../chess-board";
-import { type PieceType } from ".";
-import {
-  getPieceImageAsync,
-  jumpBehavior,
-  moveBehavior,
-  type Behavior,
-} from "../utils";
-
-const knightDirections = [
-  { x: -2, y: -1 },
-  { x: -2, y: 1 },
-  { x: 2, y: -1 },
-  { x: 2, y: 1 },
-  { x: -1, y: -2 },
-  { x: -1, y: 2 },
-  { x: 1, y: -2 },
-  { x: 1, y: 2 },
-];
-
-const queenDirections = [
-  { x: 1, y: 0 },
-  { x: -1, y: 0 },
-  { x: 0, y: 1 },
-  { x: 0, y: -1 },
-  { x: 1, y: 1 },
-  { x: 1, y: -1 },
-  { x: -1, y: 1 },
-  { x: -1, y: -1 },
-];
-
-const queenRider = moveBehavior(queenDirections);
-
-/** A rider along the knight's directions, i.e. a nightrider. */
-const nightriderBehavior = moveBehavior(knightDirections);
-
-/** Slides like a queen but only captures one square diagonally forward. */
-const pylonBehavior: Behavior = (piece, state) => {
-  const moves = queenRider(piece, state).filter((move) => move.type === "move");
-  const forward = piece.color === "white" ? 1 : -1;
-  const captures: SpecialMovement[] = [];
-  for (const dx of [-1, 1]) {
-    const to = { x: piece.position.x + dx, y: piece.position.y + forward };
-    if (to.x < 0 || to.x > 7 || to.y < 0 || to.y > 7) continue;
-    const target = state.pieces.find(
-      (p) => p.position.x === to.x && p.position.y === to.y,
-    );
-    if (target && target.color !== piece.color) {
-      captures.push({ to, type: "capture" });
-    }
-  }
-  return [...moves, ...captures];
-};
+import { type PieceType } from "./index.ts";
+import { getPieceImageAsync } from "../utils.ts";
 
 /**
  * The basic fairy chess pieces. The leapers move a fixed distance and jump, so
@@ -82,12 +31,6 @@ const fairyPieces = {
       size: 5,
       rows: [".....", "..x..", ".xox.", "..x..", "....."],
     },
-    behavior: jumpBehavior([
-      { x: 1, y: 0 },
-      { x: -1, y: 0 },
-      { x: 0, y: 1 },
-      { x: 0, y: -1 },
-    ]),
   },
   ferz: {
     symbol: "f",
@@ -102,12 +45,6 @@ const fairyPieces = {
       size: 5,
       rows: [".....", ".x.x.", "..o..", ".x.x.", "....."],
     },
-    behavior: jumpBehavior([
-      { x: 1, y: 1 },
-      { x: 1, y: -1 },
-      { x: -1, y: 1 },
-      { x: -1, y: -1 },
-    ]),
   },
   camel: {
     symbol: "c",
@@ -129,16 +66,6 @@ const fairyPieces = {
         "..x.x..",
       ],
     },
-    behavior: jumpBehavior([
-      { x: 1, y: 3 },
-      { x: 1, y: -3 },
-      { x: -1, y: 3 },
-      { x: -1, y: -3 },
-      { x: 3, y: 1 },
-      { x: 3, y: -1 },
-      { x: -3, y: 1 },
-      { x: -3, y: -1 },
-    ]),
   },
   zebra: {
     symbol: "z",
@@ -159,16 +86,6 @@ const fairyPieces = {
         ".x...x.",
       ],
     },
-    behavior: jumpBehavior([
-      { x: 2, y: 3 },
-      { x: 2, y: -3 },
-      { x: -2, y: 3 },
-      { x: -2, y: -3 },
-      { x: 3, y: 2 },
-      { x: 3, y: -2 },
-      { x: -3, y: 2 },
-      { x: -3, y: -2 },
-    ]),
   },
   unicorn: {
     symbol: "u",
@@ -190,7 +107,6 @@ const fairyPieces = {
         ".......",
       ],
     },
-    behavior: nightriderBehavior,
   },
   pylon: {
     symbol: "y",
@@ -203,7 +119,6 @@ const fairyPieces = {
       size: 5,
       rows: ["x.x.x", ".cxc.", "xxoxx", ".xxx.", "x.x.x"],
     },
-    behavior: pylonBehavior,
   },
 } satisfies Record<string, PieceType>;
 

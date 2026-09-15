@@ -1,6 +1,6 @@
-import type { Piece, SpecialMovement } from "../chess-board";
-import type { Tile } from "../chess-tile";
-import { tileFromEvent } from "./board-geometry";
+import type { Piece, SpecialMovement } from "../chess-board.ts";
+import type { Tile } from "../chess-tile.ts";
+import { tileFromEvent } from "./board-geometry.ts";
 
 type DragState = {
   piece: Piece;

@@ -1,9 +1,9 @@
-import type { Tile } from "../chess-tile";
+import type { Tile } from "../chess-tile.ts";
 import {
   boardPointFromEvent,
   tileCenter,
   tileFromEvent,
-} from "./board-geometry";
+} from "./board-geometry.ts";
 
 const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
 // Length of the arrowhead, and half of its width at the base, in squares.

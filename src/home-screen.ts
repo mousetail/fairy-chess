@@ -1,7 +1,7 @@
-import ChessScreen, { type ChessScreenOptions } from "./chess-screen/index";
-import type { Player } from "./chess-game";
-import { chaosLevels } from "./replacement-rules";
-import type { Screen } from "./screen";
+import ChessScreen, { type ChessScreenOptions } from "./chess-screen/index.ts";
+import type { Player } from "./chess-game.ts";
+import { chaosLevels } from "./replacement-rules.ts";
+import type { Screen } from "./screen.ts";
 
 interface RadioGroup {
   element: HTMLDivElement;

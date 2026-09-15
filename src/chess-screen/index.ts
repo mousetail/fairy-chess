@@ -8,22 +8,22 @@ import {
   type ChessBoardState,
   type Piece,
   type SpecialMovement,
-} from "../chess-board";
-import { ChessGame, type GameStatus, type Player } from "../chess-game";
-import type { Tile } from "../chess-tile";
-import { HistoryBar } from "../history-bar";
-import { PieceInfoBar } from "../piece-info-bar";
-import { chaosLevels } from "../replacement-rules";
-import type { Screen } from "../screen";
-import { AiPlayer } from "../ai/ai-player";
-import { ArrowsLayer } from "./arrows-layer";
-import { BoardView } from "./board-view";
-import { tileFromEvent } from "./board-geometry";
-import { getImageFromPromise } from "./piece-images";
-import { PieceDragController } from "./piece-drag-controller";
-import { createPromotionDialogue } from "./promotion-dialogue";
-import type { PieceType } from "../pieces/piece_types";
-import pieceTypes from "../pieces/piece_types";
+} from "../chess-board.ts";
+import { ChessGame, type GameStatus, type Player } from "../chess-game.ts";
+import type { Tile } from "../chess-tile.ts";
+import { HistoryBar } from "../history-bar.ts";
+import { PieceInfoBar } from "../piece-info-bar.ts";
+import { chaosLevels } from "../replacement-rules.ts";
+import type { Screen } from "../screen.ts";
+import { AiPlayer } from "../ai/ai-player.ts";
+import { ArrowsLayer } from "./arrows-layer.ts";
+import { BoardView } from "./board-view.ts";
+import { tileFromEvent } from "./board-geometry.ts";
+import { getImageFromPromise } from "./piece-images.ts";
+import { PieceDragController } from "./piece-drag-controller.ts";
+import { createPromotionDialogue } from "./promotion-dialogue.ts";
+import type { PieceType } from "../pieces/piece_types/index.ts";
+import pieceTypes from "../pieces/piece_types/index.ts";
 
 /** The pieces `mine` has that `theirs` does not, ordered from least to most valuable. */
 function surplusPieces(mine: Piece[], theirs: Piece[]): PieceType[] {

@@ -1,65 +1,5 @@
-import { type ChessBoardState, type Piece } from "../../chess-board";
-import { type PieceType } from ".";
-import {
-  getPieceImageAsync,
-  jumpBehavior,
-  moveBehavior,
-  type Behavior,
-} from "../utils";
-
-/** A piece that may use the moves of every one of the given behaviors. */
-function combine(...behaviors: Behavior[]): Behavior {
-  return (piece: Piece, state: ChessBoardState) =>
-    behaviors.flatMap((behavior) => behavior(piece, state));
-}
-
-const knight = jumpBehavior([
-  { x: -2, y: -1 },
-  { x: -2, y: 1 },
-  { x: 2, y: -1 },
-  { x: 2, y: 1 },
-  { x: -1, y: -2 },
-  { x: -1, y: 2 },
-  { x: 1, y: -2 },
-  { x: 1, y: 2 },
-]);
-
-const rook = moveBehavior([
-  { x: -1, y: 0 },
-  { x: 1, y: 0 },
-  { x: 0, y: -1 },
-  { x: 0, y: 1 },
-]);
-
-const bishop = moveBehavior([
-  { x: 1, y: 1 },
-  { x: 1, y: -1 },
-  { x: -1, y: 1 },
-  { x: -1, y: -1 },
-]);
-
-const queen = moveBehavior([
-  { x: 1, y: 0 },
-  { x: -1, y: 0 },
-  { x: 0, y: 1 },
-  { x: 0, y: -1 },
-  { x: 1, y: 1 },
-  { x: 1, y: -1 },
-  { x: -1, y: 1 },
-  { x: -1, y: -1 },
-]);
-
-/** The king's single-step movement, without castling. */
-const king = jumpBehavior([
-  { x: 1, y: 0 },
-  { x: -1, y: 0 },
-  { x: 0, y: 1 },
-  { x: 0, y: -1 },
-  { x: 1, y: 1 },
-  { x: 1, y: -1 },
-  { x: -1, y: 1 },
-  { x: -1, y: -1 },
-]);
+import { type PieceType } from "./index.ts";
+import { getPieceImageAsync } from "../utils.ts";
 
 // The knight combinations use the centaur artwork; the king combinations have
 // no dedicated artwork yet, so they borrow the classic image of their other
@@ -87,7 +27,6 @@ const combinationPieces = {
       size: 5,
       rows: [".xxx.", "x.x.x", "xxoxx", "x.x.x", ".xxx."],
     },
-    behavior: combine(knight, rook),
   },
   knishop: {
     symbol: "a",
@@ -102,7 +41,6 @@ const combinationPieces = {
       size: 5,
       rows: ["xxxxx", "xxxxx", "..o..", "xxxxx", "xxxxx"],
     },
-    behavior: combine(knight, bishop),
   },
   kniween: {
     symbol: "a",
@@ -117,7 +55,6 @@ const combinationPieces = {
       size: 5,
       rows: ["xxxxx", "xxxxx", "xxoxx", "xxxxx", "xxxxx"],
     },
-    behavior: combine(knight, queen),
   },
   kning: {
     symbol: "c",
@@ -132,7 +69,6 @@ const combinationPieces = {
       size: 5,
       rows: [".x.x.", "xxxxx", ".xox.", "xxxxx", ".x.x."],
     },
-    behavior: combine(knight, king),
   },
   bing: {
     symbol: "i",
@@ -145,7 +81,6 @@ const combinationPieces = {
       size: 5,
       rows: ["x...x", ".xxx.", ".xox.", ".xxx.", "x...x"],
     },
-    behavior: combine(bishop, king),
   },
   ring: {
     symbol: "e",
@@ -158,7 +93,6 @@ const combinationPieces = {
       size: 5,
       rows: ["..x..", ".xxx.", "xxoxx", ".xxx.", "..x.."],
     },
-    behavior: combine(rook, king),
   },
 } satisfies Record<string, PieceType>;
 

@@ -4,10 +4,10 @@ import {
   type ChessBoardState,
   type Piece,
   type SpecialMovement,
-} from "../chess-board";
-import type { ChessGame } from "../chess-game";
-import type { PieceType } from "../pieces/piece_types";
-import pieceTypes from "../pieces/piece_types";
+} from "../chess-board.ts";
+import type { ChessGame } from "../chess-game.ts";
+import type { PieceType } from "../pieces/piece_types/index.ts";
+import pieceTypes from "../pieces/piece_types/index.ts";
 
 const FILES = "abcdefgh";
 
@@ -67,7 +67,7 @@ function boardStateToCastlingRights(state: ChessBoardState): string {
   for (const color of ["white", "black"] as const) {
     const backRank = color === "white" ? 0 : 7;
     const king = state.pieces.find(
-      (piece) => piece.type === pieceTypes.king && piece.color === color,
+      (piece) => piece.type.canCastle && piece.color === color,
     );
     if (!king || king.hasMoved) continue;
 

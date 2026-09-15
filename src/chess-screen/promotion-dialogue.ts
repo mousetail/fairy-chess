@@ -1,6 +1,6 @@
-import type { Piece, SpecialMovement } from "../chess-board";
-import type { PieceType } from "../pieces/piece_types";
-import { getImageFromPromise } from "./piece-images";
+import type { Piece, SpecialMovement } from "../chess-board.ts";
+import type { PieceType } from "../pieces/piece_types/index.ts";
+import { getImageFromPromise } from "./piece-images.ts";
 
 /** Shows the promotion choices over the board and reports the chosen piece. */
 export function createPromotionDialogue(

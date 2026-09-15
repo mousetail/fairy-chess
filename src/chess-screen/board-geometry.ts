@@ -1,4 +1,4 @@
-import type { Tile } from "../chess-tile";
+import type { Tile } from "../chess-tile.ts";
 
 /** Center of a tile in the board's 8x8 SVG coordinate space. */
 export function tileCenter(tile: Tile): { x: number; y: number } {

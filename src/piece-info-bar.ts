@@ -1,6 +1,6 @@
-import type { PieceType } from "./pieces/piece_types";
-import { parseDiagram, type DiagramTile } from "./pieces/diagram";
-import { getImageFromPromise } from "./chess-screen/piece-images";
+import type { PieceType } from "./pieces/piece_types/index.ts";
+import { parseDiagram, type DiagramTile } from "./pieces/diagram.ts";
+import { getImageFromPromise } from "./chess-screen/piece-images.ts";
 
 const tileClass: Record<DiagramTile, string> = {
   empty: "empty",

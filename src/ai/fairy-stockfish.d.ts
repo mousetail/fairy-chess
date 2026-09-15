@@ -13,6 +13,8 @@ declare module "fairy-stockfish-nnue.wasm/stockfish.js" {
   export interface StockfishConfig {
     locateFile?(path: string, prefix: string): string;
     mainScriptUrlOrBlob?: string;
+    /** The compiled wasm module, used when loading the engine outside a browser. */
+    wasmBinary?: Uint8Array;
   }
 
   const factory: (config?: StockfishConfig) => Promise<StockfishModule>;

@@ -1,7 +1,7 @@
-import type { ChessGame } from "../chess-game";
-import { FairyStockfishEngine } from "./engine";
-import { boardStateToFen, resolveUciMove, type ResolvedMove } from "./fen";
-import { buildVariantIni, VARIANT_NAME } from "./variant";
+import type { ChessGame } from "../chess-game.ts";
+import { FairyStockfishEngine } from "./engine.ts";
+import { boardStateToFen, resolveUciMove, type ResolvedMove } from "./fen.ts";
+import { buildVariantIni, VARIANT_NAME } from "./variant.ts";
 
 export interface AiSettings {
   /** Minimum time, in milliseconds, before the AI plays its move. */
