@@ -209,7 +209,7 @@ body {
   gap: 0.25rem;
   /* A fixed height so the panel never grows or scrolls; the diagram and the
      reserved text lines are sized to fit exactly. */
-  flex: 0 0 12.5rem;
+  flex: 0 0 14.5rem;
   padding: 0.5rem;
   overflow: hidden;
   border: 2px solid black;
@@ -249,6 +249,7 @@ body {
   position: relative;
   min-width: 0;
   background-color: var(--light-square-color);
+  aspect-ratio: 1;
 }
 
 .piece-info-tile.even {

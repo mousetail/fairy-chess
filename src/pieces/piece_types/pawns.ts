@@ -178,6 +178,58 @@ const sentryBehavior = normalizeColor(
   },
 );
 
+const diagonalSteps = [
+  { x: 1, y: 1 },
+  { x: 1, y: -1 },
+  { x: -1, y: 1 },
+  { x: -1, y: -1 },
+];
+
+const orthogonalSteps = [
+  { x: 1, y: 0 },
+  { x: -1, y: 0 },
+  { x: 0, y: 1 },
+  { x: 0, y: -1 },
+];
+
+/**
+ * Steps one square diagonally, and jumps an adjacent piece — friend or foe — to
+ * move or capture on the square just beyond it. It can also capture beyond an
+ * adjacent piece straight up, down, left or right, but never captures a piece
+ * it stands next to, so like a checkers piece it only captures by jumping.
+ */
+const pseudocheckersBehavior = normalizeColor(
+  (position, isOccupied, isOccupiedByEnemy, state) => {
+    const moves: SpecialMovement[] = [];
+    for (const dir of diagonalSteps) {
+      const step = { x: position.x + dir.x, y: position.y + dir.y };
+      if (!inBounds(step)) continue;
+      // Plain fers step, quiet only: a checkers tile never captures adjacent.
+      if (!isOccupied(step)) {
+        moves.push({ to: step, type: "move" });
+      }
+      // Jump the adjacent piece and land, or capture, just beyond it.
+      const landing = { x: position.x + 2 * dir.x, y: position.y + 2 * dir.y };
+      if (!isOccupied(step) || !inBounds(landing)) continue;
+      if (isOccupiedByEnemy(landing)) {
+        moves.push({ to: landing, type: "capture" });
+      } else if (!isOccupied(landing)) {
+        moves.push({ to: landing, type: "move" });
+      }
+    }
+    // Straight jumps are capture-only.
+    for (const dir of orthogonalSteps) {
+      const step = { x: position.x + dir.x, y: position.y + dir.y };
+      const landing = { x: position.x + 2 * dir.x, y: position.y + 2 * dir.y };
+      if (!inBounds(step) || !isOccupied(step) || !inBounds(landing)) continue;
+      if (isOccupiedByEnemy(landing)) {
+        moves.push({ to: landing, type: "capture" });
+      }
+    }
+    return withPromotion(moves, state);
+  },
+);
+
 const kingDirections = [
   { x: 1, y: 0 },
   { x: -1, y: 0 },
@@ -222,6 +274,7 @@ const wallBehavior: Behavior = (piece, state) => {
  *   torpedo         = t
  *   sentry          = s
  *   wall            = x
+ *   pseudocheckers  = o
  *
  * The two jumping pawns are the same piece split by the half of the board it
  * starts on, so each has a fixed diagonal towards the centre; `variant.ts`
@@ -267,7 +320,7 @@ const pawnPieces = {
     promotesLikePawn: true,
     image: getPieceImageAsync("medieval", "guardian"),
     value: 1,
-    displayName: "Jumping Pawn (Left)",
+    displayName: "Jumping Pawn",
     description:
       "Moves forward or diagonally towards the centre; captures backwards any distance.",
     diagram: {
@@ -283,7 +336,7 @@ const pawnPieces = {
     promotesLikePawn: true,
     image: getPieceImageAsync("medieval", "guardian"),
     value: 1,
-    displayName: "Jumping Pawn (Right)",
+    displayName: "Jumping Pawn",
     description:
       "Moves forward or diagonally towards the centre; captures backwards any distance.",
     diagram: {
@@ -336,6 +389,23 @@ const pawnPieces = {
       rows: [".....", ".ccc.", ".coc.", ".ccc.", "....."],
     },
     behavior: wallBehavior,
+  },
+  pseudocheckers: {
+    symbol: "o",
+    betza: "mFgF2gcK2",
+    promotionAbility: "deny",
+    promotesLikePawn: true,
+    image: getPieceImageAsync("geometry", "circle"),
+    value: 2,
+    displayName: "Pseudocheckers Tile",
+    aliases: ["Checkers Tile"],
+    description:
+      "Steps one square diagonally and jumps an adjacent piece to move or capture just beyond it; also captures just beyond an adjacent piece sideways or forwards.",
+    diagram: {
+      size: 5,
+      rows: ["x.c.x", ".x.x.", "c.o.c", ".x.x.", "x.c.x"],
+    },
+    behavior: pseudocheckersBehavior,
   },
 } satisfies Record<string, PieceType>;
 

@@ -23,8 +23,8 @@ pieces can be built from the helpers in `utils.ts`:
 - `normalizeColor(inner)` — flips the board for black so a behavior can be
   written from white's point of view (used by the pawn).
 
-Reach for a hand-written behavior only when the pattern is irregular; the wall,
-pylon and pseudocheckers in `fairy.ts` are examples.
+Reach for a hand-written behavior only when the pattern is irregular; the pylon
+in `fairy.ts` and the wall and pseudocheckers in `pawns.ts` are examples.
 
 ## 2. Add the `PieceType`
 
@@ -64,14 +64,26 @@ board.
   (`customPiece1 = o:mFA`), so most new pieces need no change to `variant.ts`
   at all. Only add a `builtInTypes` entry when a matching built-in exists.
 
+A piece whose movement depends on which half of the board it stands on can be
+restricted with a `mobilityRegion`, a per-colour set of squares it may move to.
+Add an entry to the `mobilityRegions` map in `variant.ts`, written in
+Fairy-Stockfish's bitboard syntax (e.g. `a* b* c* d*` for the four left files);
+the jumping pawns are the current examples.
+
 Fairy-Stockfish supports only a subset of Betza notation; the supported
 features are listed in the *Custom pieces* section of `variants.ini` (base
 atoms, directional modifiers, sliders/riders, W/R and F/B hoppers, and the lame
-leapers `nN`, `nA`, `nZ`, `nD`). If a movement cannot be expressed within that
-subset, approximate it and say so in the piece's `description` — for example
-Fairy-Stockfish cannot require the piece a pseudocheckers jump clears to be
-adjacent, so its Betza is a diagonal grasshopper (`mFgB`), which jumps the first
-piece on the diagonal however far away it stands.
+leapers `nN`, `nA`, `nZ`, `nD`). A piece may only be added when its movement is
+expressible exactly within that subset. Do not approximate: a `betza` that is
+close but not identical to `behavior` makes the AI disagree with the board, so
+leave such a piece unimplemented instead.
+
+Hoppers can also be given a maximum range by appending a digit to the atom, e.g.
+`pW2` or `pF3`. The digit is the maximum distance from the origin square,
+counting the hurdle square — so `pF2` leaps an adjacent piece and lands two
+squares away, while `pF3` also allows landing three squares out. A bare `pF` (or
+`pF0`) is unlimited, and `gF`/`pF1` is a grasshopper. The prefix combines with
+any atom and modality, so `gcK2` is a capture-only jump in all eight directions.
 
 The engine is taught the rules through a generated `variants.ini` written into
 the WebAssembly filesystem and loaded via the `VariantPath` option; see
@@ -87,5 +99,9 @@ as long as one of them lists a free fallback.
 - `pawnRule(name, file, to)` swaps one specific pawn.
 - `pawnSquadRule(name, to)` converts a colour's whole pawn corps, for pieces
   that arrive as a squad rather than a single specialist.
+- `pawnSplitRule(name, left, right)` converts the corps, choosing between two
+  variants by which half of the board each pawn starts on.
+- `pawnDoubleRowRule(name, to)` converts the corps and adds a second row in
+  front of it, for a piece whose copies work together when stacked.
 
 Add the new piece to `replacementRules` if it should be able to enter a game.

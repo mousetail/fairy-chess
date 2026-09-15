@@ -143,6 +143,43 @@ function pawnSplitRule(
 }
 
 /**
+ * Builds a rule for a piece that arrives as a stacked double squad: it replaces
+ * every pawn of a colour and adds a copy one square in front of each, so the
+ * corps fills two whole rows. The second row is wanted because the piece jumps
+ * an adjacent piece, so the copies in front of each other give the formation
+ * its bite.
+ *
+ * Like {@link pawnSquadRule} it converts the whole corps, so it deliberately
+ * ignores {@link maxCopiesPerPiece}.
+ */
+function pawnDoubleRowRule(name: string, to: PieceType): ReplacementRule {
+  return {
+    name,
+    complexity: 16,
+    apply: (board, color) => {
+      const pawns = board.pieces.filter(
+        (candidate) =>
+          candidate.color === color && candidate.type === pieceTypes.pawn,
+      );
+      if (pawns.length === 0) return false;
+      const forward = color === "white" ? 1 : -1;
+      let nextId = board.pieces.reduce((max, p) => Math.max(max, p.id), -1) + 1;
+      for (const pawn of pawns) {
+        pawn.type = to;
+        board.pieces.push({
+          type: to,
+          color,
+          position: { x: pawn.position.x, y: pawn.position.y + forward },
+          hasMoved: false,
+          id: nextId++,
+        });
+      }
+      return true;
+    },
+  };
+}
+
+/**
  * Every replacement currently available, each combining two single pieces into
  * the compound that moves like both. The king is never used as a source, since
  * it carries the check and castling rules.
@@ -175,7 +212,7 @@ export const replacementRules: ReplacementRule[] = [
   ),
   pawnSquadRule("Pawns → Torpedoes", pieceTypes.torpedo),
   pawnSquadRule("Pawns → Sentries", pieceTypes.sentry),
-  // pawnSquadRule("Pawns → Pseudocheckers", pieceTypes.pseudocheckers),
+  pawnDoubleRowRule("Pawns → Pseudocheckers", pieceTypes.pseudocheckers),
 ];
 
 /** A setting on the home screen's chaos slider. */
