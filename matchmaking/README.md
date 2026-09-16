@@ -30,14 +30,14 @@ this server, because the site is configured from it as well: everything a
 deployment has to decide lives in one place, however much of the project reads
 it.
 
-| Variable               | Default   | Read by  | Meaning                                                                                                                                                              |
-| ---------------------- | --------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `PORT`                 | `8000`    | server   | Port to listen on.                                                                                                                                                   |
-| `HOST`                 | `0.0.0.0` | server   | Address to bind.                                                                                                                                                     |
-| `ALLOWED_ORIGINS`      | _(empty)_ | server   | Comma-separated origins allowed to open a socket, e.g. `https://fairy-chess.com,https://www.fairy-chess.com`. An empty value allows every origin and logs a warning. |
-| `HEARTBEAT_MS`         | `30000`   | server   | How often a keepalive is sent, in milliseconds. Zero disables them.                                                                                                  |
-| `MAX_MESSAGE_BYTES`    | `8192`    | server   | The largest message accepted from a client, in UTF-16 code units.                                                                                                    |
-| `VITE_MATCHMAKING_URL` | _(unset)_ | the site | The server the browser should connect to. Unset, a development build uses `ws://localhost:8000/ws` and a production build the live host.                             |
+| Variable               | Default   | Read by  | Meaning                                                                                                                                                                                                                                 |
+| ---------------------- | --------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PORT`                 | `8000`    | server   | Port to listen on.                                                                                                                                                                                                                      |
+| `HOST`                 | `0.0.0.0` | server   | Address to bind.                                                                                                                                                                                                                        |
+| `ALLOWED_ORIGINS`      | _(empty)_ | server   | Comma-separated origins allowed to open a socket, e.g. `https://fairy-chess.com,https://www.fairy-chess.com`. An empty value allows every origin and logs a warning.                                                                    |
+| `HEARTBEAT_MS`         | `30000`   | server   | How often a keepalive is sent, in milliseconds. Zero disables them.                                                                                                                                                                     |
+| `MAX_MESSAGE_BYTES`    | `8192`    | server   | The largest message accepted from a client, in UTF-16 code units.                                                                                                                                                                       |
+| `VITE_MATCHMAKING_URL` | _(unset)_ | the site | The server the browser should connect to. Each deployment states its own in its `.env`: `ws://localhost:8000/ws` for a checkout, the host's `wss://` address in production. A build made without one offers no online play and says so. |
 
 `.env.example` is the template; copy it to `.env` and edit. Anything already in
 the real environment takes precedence over the file, so a service manager can
@@ -85,9 +85,12 @@ websites from opening sockets in a visitor's browser; a request without an
 page. During development that means listing both the live site and the Vite dev
 server, e.g. `ALLOWED_ORIGINS=https://fairy-chess.com,http://localhost:5173`.
 
-The site itself needs to be told where this server is: set
-`VITE_MATCHMAKING_URL=wss://fairy-chess-matchmaking.mousetail.nl/ws` in the
-build environment, or leave it unset to accept the default above.
+The site itself needs to be told where this server is, and each deployment says
+it in its own `.env`: `VITE_MATCHMAKING_URL=ws://localhost:8000/ws` for a
+checkout, and the host's `wss://` address in production. The live site is built
+by `.github/workflows/pages.yml`, which passes the `VITE_MATCHMAKING_URL`
+repository secret to the build, so moving a deployment to a different server is
+a change of secret; a build made without one offers no online play and says so.
 
 ## How players are matched
 
@@ -235,7 +238,7 @@ On the browser side, `../src/online/` holds the pieces that speak this protocol:
 | `time-controls.ts` | The clocks a game can be played at, shared with this server.                                         |
 | `client.ts`        | The socket: queues what is sent before it opens, answers keepalives, reports what arrives.           |
 | `session.ts`       | The connection and the state of the search, held by the app rather than by any one screen.           |
-| `config.ts`        | Reads `VITE_MATCHMAKING_URL` and falls back to the known deployments.                                |
+| `config.ts`        | Reads `VITE_MATCHMAKING_URL`; a build made without one has no server to talk to.                     |
 
 `../src/app.ts` owns the screen on show and the session, so a player who is
 waiting for an opponent keeps browsing their discoveries instead of sitting on a

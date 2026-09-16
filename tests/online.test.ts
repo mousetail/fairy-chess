@@ -3,11 +3,7 @@ import { test } from "node:test";
 import type { ServerMessage } from "../src/online/protocol.ts";
 import { parseServerMessage } from "../src/online/protocol.ts";
 import { MatchmakingClient } from "../src/online/client.ts";
-import { resolveMatchmakingUrl } from "../src/online/config.ts";
 import { FakeSocket } from "./fake-socket.ts";
-
-/** The server a production build falls back to. */
-const PRODUCTION_URL = "wss://fairy-chess-matchmaking.mousetail.nl/ws";
 
 /** A partial screen, for a test that wants to watch or break the messages. */
 interface ScreenStub {
@@ -224,28 +220,4 @@ test("only messages with a type this build knows are accepted", () => {
   assert.equal(parseServerMessage("not json at all"), undefined);
   assert.equal(parseServerMessage(7), undefined);
   assert.equal(parseServerMessage(undefined), undefined);
-});
-
-test("the matchmaking URL is taken from the environment when it is set", () => {
-  assert.equal(
-    resolveMatchmakingUrl("wss://example.test/ws", false),
-    "wss://example.test/ws",
-  );
-  // A stray newline from a `.env` file must not reach the URL.
-  assert.equal(
-    resolveMatchmakingUrl("  ws://example.test/ws  ", true),
-    "ws://example.test/ws",
-  );
-});
-
-test("the matchmaking URL falls back to the well-known servers", () => {
-  assert.equal(
-    resolveMatchmakingUrl(undefined, true),
-    "ws://localhost:8000/ws",
-  );
-  // An empty setting is no setting at all.
-  assert.equal(resolveMatchmakingUrl("", true), "ws://localhost:8000/ws");
-  assert.equal(resolveMatchmakingUrl("   ", true), "ws://localhost:8000/ws");
-  assert.equal(resolveMatchmakingUrl("", false), PRODUCTION_URL);
-  assert.equal(resolveMatchmakingUrl(undefined, false), PRODUCTION_URL);
 });

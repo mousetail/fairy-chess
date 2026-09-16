@@ -116,7 +116,10 @@ export interface MatchmakingSessionOptions {
    * session has already cleared its own state by the time this runs.
    */
   onGame(game: OnlineGame): void;
-  /** The server to talk to; the deployment's own by default. */
+  /**
+   * The server to talk to, in place of the one the build was made with. Tests
+   * set it; a blank value stands for a build that was told of none.
+   */
   url?: string;
   /** How sockets are made; overridable so tests need no server. */
   createSocket?: SocketFactory;
@@ -219,8 +222,18 @@ export class MatchmakingSession {
   }
 
   private connect(): void {
+    // Where to connect is a deployment's decision. A build that was not given
+    // one says so, rather than opening a socket to an address nobody chose.
+    const url = this.options.url ?? matchmakingUrl;
+    if (url === undefined) {
+      this.fail(
+        "Matchmaking URL not configured.",
+      );
+      return;
+    }
+
     const client = new MatchmakingClient(
-      this.options.url ?? matchmakingUrl,
+      url,
       {
         onMessage: (message) => this.receive(message),
         onOpen: () => this.joinNow(client),

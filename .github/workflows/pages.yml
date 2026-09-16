@@ -39,6 +39,8 @@ jobs:
         run: npm ci
       - name: Build
         run: npx vite build
+        env:
+          VITE_MATCHMAKING_URL: ${{ vars.VITE_MATCHMAKING_URL }}
       - name: Setup Pages
         uses: actions/configure-pages@v5
       - name: Upload artifact

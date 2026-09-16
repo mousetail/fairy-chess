@@ -14,13 +14,13 @@ import type { SerializedBoardState } from "../src/online/serialization.ts";
 import { FakeSocket } from "./fake-socket.ts";
 
 /** A session over sockets the test drives, and everything it has reported. */
-function sessionOver() {
+function sessionOver(options: { url?: string } = {}) {
   const sockets: FakeSocket[] = [];
   const statuses: MatchmakingStatus[] = [];
   const games: OnlineGame[] = [];
 
   const session = new MatchmakingSession({
-    url: "ws://matchmaking.test/ws",
+    url: options.url ?? "ws://matchmaking.test/ws",
     createSocket: () => {
       const socket = new FakeSocket();
       sockets.push(socket);
