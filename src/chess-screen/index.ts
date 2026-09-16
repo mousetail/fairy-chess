@@ -335,17 +335,14 @@ export default class ChessScreen implements Screen {
       this.boardView.addPiece(piece);
     }
 
-    const sidebar = document.createElement("div");
-    sidebar.classList.add("sidebar");
-    parent.appendChild(sidebar);
-
     this.noticeElement = document.createElement("p");
     this.noticeElement.classList.add("game-notice");
     this.noticeElement.hidden = true;
-    sidebar.appendChild(this.noticeElement);
+    // Above the board, where a status line reads without crowding the panels.
+    leftColumn.prepend(this.noticeElement);
 
-    sidebar.appendChild(this.scoreWidget);
-    sidebar.appendChild(this.pieceInfoBar.element);
+    parent.appendChild(this.scoreWidget);
+    parent.appendChild(this.pieceInfoBar.element);
     this.playAgainButton.addEventListener("click", () => {
       this.deactivate();
       if (this.options.onPlayAgain) {
@@ -375,7 +372,7 @@ export default class ChessScreen implements Screen {
     this.renderResignButton();
 
     this.historyBar = new HistoryBar(
-      sidebar,
+      parent,
       (state) => {
         this.visibleState = state;
         this.clearSelection();
@@ -393,7 +390,7 @@ export default class ChessScreen implements Screen {
     );
 
     // Below the move log, so it is out of the way of the game itself.
-    if (this.gameActions) sidebar.appendChild(this.gameActions);
+    if (this.gameActions) parent.appendChild(this.gameActions);
 
     document.addEventListener("keydown", this.onKeyDown);
     document.addEventListener("pointerdown", this.onDocumentPointerDown);
@@ -846,7 +843,7 @@ export default class ChessScreen implements Screen {
     this.renderDrawButton();
   }
 
-  /** Shows a short message in the sidebar, for what the game cannot say. */
+  /** Shows a short message beside the board, for what the game cannot say. */
   showNotice(text: string): void {
     if (!this.noticeElement) return;
     this.noticeElement.textContent = text;
@@ -988,8 +985,8 @@ export default class ChessScreen implements Screen {
   /**
    * Clicking anywhere off the board drops the movement selection, and puts an
    * armed resign button back, so confirming a resignation always takes two
-   * clicks on the button itself. The sidebar is left alone, so the last
-   * inspected piece stays on display.
+   * clicks on the button itself. The panels beside the board are left alone, so
+   * the last inspected piece stays on display.
    */
   private onDocumentPointerDown = (event: PointerEvent): void => {
     if (event.button !== 0 || this.handlingPromotion) return;

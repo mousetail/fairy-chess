@@ -118,7 +118,7 @@ export class DiscoveriesScreen implements Screen {
 
     if (record.wins > 0) card.classList.add("won");
 
-    // Discovered cards open the same panel the game shows in its sidebar.
+    // Discovered cards open the same panel the game shows beside the board.
     card.tabIndex = 0;
     card.setAttribute("role", "button");
     card.setAttribute("aria-label", `Show details for ${type.displayName}`);

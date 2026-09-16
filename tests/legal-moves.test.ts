@@ -7,7 +7,6 @@ import {
   type ChessBoardState,
   type TaggedMove,
 } from "../src/chess-board.ts";
-import { resolveSymbols } from "../src/chess-game.ts";
 import pieceTypes from "../src/pieces/piece_types/index.ts";
 import type { PieceType } from "../src/pieces/piece_types/index.ts";
 import { createEngine, type Engine } from "./engine.ts";
@@ -21,33 +20,35 @@ import {
 const BLOCKERS = ["d6", "f4", "b4", "d2", "e5", "c5", "e3", "c3"];
 
 /**
- * A variant that defines every piece type, so any position can be tested. A
- * variant can only have one royal piece, so the other king variants are left
- * out and `kingType` is declared as the engine's king instead.
+ * Builds a position together with the variant the engine needs to play it.
+ *
+ * The variant declares only the piece types on the board. Fairy-Stockfish gives
+ * every piece type a single letter and there are only 26 of them, so the whole
+ * set of piece types at once cannot be described: each position gets its own
+ * variant instead.
  */
-function allTypesVariant(kingType: PieceType = pieceTypes.king): {
-  name: string;
-  ini: string;
-  symbols: Map<PieceType, string>;
-} {
-  const types = (Object.values(pieceTypes) as PieceType[]).filter(
-    (type) => !type.royal || type === kingType,
-  );
-  const symbols = resolveSymbols(types);
-  const state: ChessBoardState = {
-    pieces: [],
-    turn: "white",
-    halfTurnNumber: 0,
-    lastMove: undefined,
-    symbols,
-  };
-  // The engine keys a variant by name, so a variant whose royal piece is not the
-  // classic king needs its own name to make the engine reload it.
-  const name =
-    kingType === pieceTypes.king
-      ? VARIANT_NAME
-      : `${VARIANT_NAME}-${kingType.displayName.toLowerCase()}`;
-  return { name, ini: buildVariantIni(state, name), symbols };
+function buildVariantPosition(
+  placements: Placement[],
+  turn: "white" | "black",
+  options: { lastMove?: TaggedMove } = {},
+): { name: string; ini: string; state: ChessBoardState } {
+  const state = buildState(placements, turn, { lastMove: options.lastMove });
+  // The engine ignores a variant whose name it has already registered, so every
+  // definition needs a name of its own. The body of the variant identifies it
+  // completely, so a hash of the body does too.
+  const name = `${VARIANT_NAME}-${hashVariant(
+    buildVariantIni(state, VARIANT_NAME),
+  )}`;
+  return { name, ini: buildVariantIni(state, name), state };
+}
+
+/** A short, stable hash of a variant, used to give each definition its own name. */
+function hashVariant(text: string): string {
+  let hash = 2166136261;
+  for (let index = 0; index < text.length; index++) {
+    hash = Math.imul(hash ^ text.charCodeAt(index), 16777619);
+  }
+  return (hash >>> 0).toString(36);
 }
 
 /** Every legal move of the side to move, as `e2e4` (with a promotion letter). */
@@ -90,7 +91,6 @@ test("every piece type's legal moves match the engine", async () => {
       // A royal piece is its own king, so it replaces the classic king in the
       // variant and on the board; everything else needs a classic king.
       const kingType = type.royal ? type : pieceTypes.king;
-      const { name, ini, symbols } = allTypesVariant(kingType);
       const placements: Placement[] = [
         { type, color: "white", square: "d4" },
         { type: kingType, color: "black", square: "a8" },
@@ -101,7 +101,7 @@ test("every piece type's legal moves match the engine", async () => {
       for (const square of BLOCKERS) {
         placements.push({ type: pieceTypes.pawn, color: "black", square });
       }
-      const state = buildState(placements, "white", { symbols });
+      const { name, ini, state } = buildVariantPosition(placements, "white");
       await assertPositionMatchesEngine(
         engine,
         name,
@@ -118,8 +118,7 @@ test("every piece type's legal moves match the engine", async () => {
 test("castling matches the engine", async () => {
   const engine = await createEngine();
   try {
-    const { name, ini, symbols } = allTypesVariant();
-    const state = buildState(
+    const { name, ini, state } = buildVariantPosition(
       [
         { type: pieceTypes.king, color: "white", square: "e1" },
         { type: pieceTypes.rook, color: "white", square: "h1" },
@@ -127,7 +126,6 @@ test("castling matches the engine", async () => {
         { type: pieceTypes.king, color: "black", square: "e8" },
       ],
       "white",
-      { symbols },
     );
     await assertPositionMatchesEngine(engine, name, ini, state, "castling");
   } finally {
@@ -138,10 +136,9 @@ test("castling matches the engine", async () => {
 test("castling out of and through check matches the engine", async () => {
   const engine = await createEngine();
   try {
-    const { name, ini, symbols } = allTypesVariant();
     // The black rook attacks f1, so the king may not castle through it; the
     // black bishop attacks e1, so it may not castle out of check either.
-    const state = buildState(
+    const { name, ini, state } = buildVariantPosition(
       [
         { type: pieceTypes.king, color: "white", square: "e1" },
         { type: pieceTypes.rook, color: "white", square: "h1" },
@@ -151,7 +148,6 @@ test("castling out of and through check matches the engine", async () => {
         { type: pieceTypes.bishop, color: "black", square: "b4" },
       ],
       "white",
-      { symbols },
     );
     await assertPositionMatchesEngine(
       engine,
@@ -168,7 +164,6 @@ test("castling out of and through check matches the engine", async () => {
 test("en passant matches the engine", async () => {
   const engine = await createEngine();
   try {
-    const { name, ini, symbols } = allTypesVariant();
     const lastMove: TaggedMove = {
       piece: {
         type: pieceTypes.pawn,
@@ -182,7 +177,7 @@ test("en passant matches the engine", async () => {
       type: "move",
       passedTilesForEnPassant: [tileFromAlgebraic("d6")],
     };
-    const state = buildState(
+    const { name, ini, state } = buildVariantPosition(
       [
         { type: pieceTypes.pawn, color: "white", square: "e5" },
         { type: pieceTypes.pawn, color: "black", square: "d5" },
@@ -190,7 +185,7 @@ test("en passant matches the engine", async () => {
         { type: pieceTypes.king, color: "black", square: "a8" },
       ],
       "white",
-      { symbols, lastMove },
+      { lastMove },
     );
     await assertPositionMatchesEngine(engine, name, ini, state, "en passant");
   } finally {
@@ -201,8 +196,7 @@ test("en passant matches the engine", async () => {
 test("promotion matches the engine", async () => {
   const engine = await createEngine();
   try {
-    const { name, ini, symbols } = allTypesVariant();
-    const state = buildState(
+    const { name, ini, state } = buildVariantPosition(
       [
         { type: pieceTypes.pawn, color: "white", square: "d7" },
         { type: pieceTypes.rook, color: "black", square: "c8" },
@@ -210,7 +204,6 @@ test("promotion matches the engine", async () => {
         { type: pieceTypes.king, color: "black", square: "a8" },
       ],
       "white",
-      { symbols },
     );
     await assertPositionMatchesEngine(engine, name, ini, state, "promotion");
   } finally {
@@ -221,8 +214,7 @@ test("promotion matches the engine", async () => {
 test("mobility regions match the engine", async () => {
   const engine = await createEngine();
   try {
-    const { name, ini, symbols } = allTypesVariant();
-    const state = buildState(
+    const { name, ini, state } = buildVariantPosition(
       [
         { type: pieceTypes.jumpingPawnLeft, color: "white", square: "b2" },
         { type: pieceTypes.jumpingPawnRight, color: "white", square: "g2" },
@@ -232,7 +224,6 @@ test("mobility regions match the engine", async () => {
         { type: pieceTypes.king, color: "black", square: "e8" },
       ],
       "white",
-      { symbols },
     );
     await assertPositionMatchesEngine(
       engine,

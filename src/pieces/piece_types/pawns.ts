@@ -141,6 +141,20 @@ const pawnPieces = {
       rows: ["x.c.x", ".x.x.", "c.o.c", ".x.x.", "x.c.x"],
     },
   },
+  "crow": {
+    symbol: "c",
+    betza: "mfWmfgRcbR",
+    image: getPieceImageAsync("nature", "crow"),
+    promotionAbility: "deny",
+    promotesLikePawn: true,
+    value: 1,
+    displayName: "Crow",
+    description: "Can move one space forward or jump over an piece any dinstance in front. Captures backwards",
+    diagram: {
+      size: 5,
+      rows: [".x...", ".E.x.", ".o.o.", ".c.c.", ".c.c."],
+    },
+  },
 } satisfies Record<string, PieceType>;
 
 export default pawnPieces;

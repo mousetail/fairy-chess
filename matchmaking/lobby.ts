@@ -44,8 +44,9 @@ interface Room {
   clients: Record<Color, Client>;
   names: Record<Color, string>;
   /**
-   * The sides that have offered a draw. An offer stands for the rest of the
-   * game, so the game is drawn as soon as both sides are in here.
+   * The sides that have offered a draw. An offer stands until a move is played,
+   * which clears both sides' offers, or until the side that made it takes it
+   * back.
    */
   drawOffers: Set<Color>;
   /** When the players were last sent their clocks, so they are not spammed. */
@@ -121,6 +122,9 @@ export class Lobby {
         return;
       case "offerDraw":
         this.offerDraw(client);
+        return;
+      case "cancelDraw":
+        this.cancelDraw(client);
         return;
       case "pong":
         // The connection layer watches for the traffic; there is nothing to do.
@@ -294,6 +298,26 @@ export class Lobby {
 
     if (!room.drawOffers.has(invertColor(color))) return;
     this.endGame(room, room.session.draw());
+  }
+
+  /**
+   * Takes back `client`'s draw offer, which leaves the game running.
+   *
+   * Both players are told, so the opponent's board stops treating the offer as
+   * one waiting to be accepted. A player with no offer standing has nothing to
+   * take back, so nothing is said about it.
+   */
+  cancelDraw(client: Client): void {
+    const room = this.roomByClient.get(client.id);
+    if (!room) {
+      this.fail(client, "You are not in a game yet.");
+      return;
+    }
+
+    const color = this.colorOf(room, client.id);
+    if (!room.drawOffers.delete(color)) return;
+
+    this.broadcast(room, { type: "drawCancelled", color });
   }
 
   /**

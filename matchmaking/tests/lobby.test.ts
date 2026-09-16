@@ -371,6 +371,61 @@ Deno.test("offering twice is not the same as the opponent offering", () => {
   assert.equal(lobby.gameCount, 1);
 });
 
+Deno.test("a draw offer can be taken back before the opponent answers", () => {
+  const lobby = deterministicLobby();
+  const { white, black } = matched(
+    lobby,
+    new FakeClient("first"),
+    new FakeClient("second"),
+  );
+
+  lobby.handleMessage(white, { type: "offerDraw" });
+  lobby.handleMessage(white, { type: "cancelDraw" });
+
+  // Both sides are told, so the opponent stops treating it as an offer to take.
+  assert.deepEqual(white.last("drawCancelled"), {
+    type: "drawCancelled",
+    color: "white",
+  });
+  assert.deepEqual(black.last("drawCancelled"), {
+    type: "drawCancelled",
+    color: "white",
+  });
+
+  // The offer is gone, so black's is a fresh one rather than an answer to it.
+  lobby.handleMessage(black, { type: "offerDraw" });
+  assert.equal(black.last("gameOver"), undefined);
+  assert.equal(lobby.gameCount, 1);
+
+  // Offering again, now that the first was taken back, does draw the game.
+  lobby.handleMessage(white, { type: "offerDraw" });
+  assert.equal(white.last("gameOver")?.winner, "draw");
+  assert.equal(lobby.gameCount, 0);
+});
+
+Deno.test("taking back an offer that is not standing says nothing", () => {
+  const lobby = deterministicLobby();
+  const { white } = matched(
+    lobby,
+    new FakeClient("first"),
+    new FakeClient("second"),
+  );
+
+  lobby.handleMessage(white, { type: "cancelDraw" });
+
+  assert.equal(white.messages("drawCancelled").length, 0);
+  assert.equal(white.messages("error").length, 0);
+});
+
+Deno.test("taking back a draw offer without a game is reported", () => {
+  const lobby = deterministicLobby();
+  const client = new FakeClient("client");
+
+  lobby.handleMessage(client, { type: "cancelDraw" });
+
+  assert.match(client.last("error")?.message ?? "", /not in a game/);
+});
+
 Deno.test("a move clears a draw offer that was standing", () => {
   const lobby = deterministicLobby();
   const { white, black } = matched(

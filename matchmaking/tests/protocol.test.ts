@@ -206,7 +206,16 @@ Deno.test("malformed messages are refused with a reason", () => {
 });
 
 Deno.test("the remaining client messages need no fields", () => {
-  for (const type of ["cancelQueue", "resign", "abort", "offerDraw", "pong"]) {
+  for (
+    const type of [
+      "cancelQueue",
+      "resign",
+      "abort",
+      "offerDraw",
+      "cancelDraw",
+      "pong",
+    ]
+  ) {
     const parsed = parseClientMessage(JSON.stringify({ type }));
     assert.deepEqual(parsed, { ok: true, message: { type } });
   }

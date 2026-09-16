@@ -146,6 +146,28 @@ function pawnSquadRule(
   };
 }
 
+function everyOtherPawnRule(
+  name: string,
+  to: PieceType,
+  positionalValue = 0,
+): ReplacementRule {
+  return {
+    name,
+    complexity: 4,
+    positionalValue,
+    apply: (board, color) => {
+      let parity = Math.random() < 0.5 ? 0 : 1;
+      const pawns = board.pieces.filter(
+        (candidate, index) =>
+          index % 2=== parity && candidate.color === color && candidate.type === pieceTypes.pawn,
+      );
+      if (pawns.length === 0) return false;
+      for (const pawn of pawns) pawn.type = to;
+      return true;
+    },
+  };
+}
+
 /**
  * Builds a rule that converts every pawn of a colour into one of two variants,
  * depending on which half of the board it starts on. Used for the jumping
@@ -246,7 +268,8 @@ export const replacementRules: ReplacementRule[] = [
   pawnRule("c-pawn → Wall", 2, pieceTypes.wall),
   pawnRule("f-pawn → Wall", 5, pieceTypes.wall),
   pawnSquadRule("Pawns → Antipawns", pieceTypes.antipawn),
-  pawnSquadRule("Pawns → Commoners", pieceTypes.commoner, 3),
+  everyOtherPawnRule("Pawns → Commoners", pieceTypes.commoner, 3),
+  everyOtherPawnRule("Pawns -> Crows", pieceTypes.crow, 1),
   pawnSplitRule(
     "Pawns → Jumping Pawns",
     pieceTypes.jumpingPawnLeft,

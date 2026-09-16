@@ -10,8 +10,8 @@ const tileClass: Record<DiagramTile, string> = {
 };
 
 /**
- * Sidebar panel describing the currently selected piece: its name, any aliases,
- * a diagram of how it moves, and a short explanation.
+ * Panel describing the currently selected piece: its name, any aliases, a
+ * diagram of how it moves, and a short explanation.
  */
 export class PieceInfoBar {
   readonly element: HTMLDivElement;

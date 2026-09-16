@@ -15,6 +15,21 @@ body {
   --highlighted-square-color: #62a87c;
   --pip-color: #313b72;
   --arrow-color: #ff8c42;
+
+  /*
+   * The space between everything the game lays out, and between that and the
+   * edge of the screen. One value, so that the board, the panels and the rows
+   * of buttons inside them all line up.
+   */
+  --gap: 0.5rem;
+
+  /*
+   * The size of one square of the board. Everything drawn in board coordinates
+   * is measured from it, so changing it scales the board and all of the pieces,
+   * pips and markers on top of it together. The mobile layout sets it from the
+   * width of the screen.
+   */
+  --square-size: 4rem;
 }
 
 /*
@@ -57,15 +72,21 @@ body {
   & .check-marker,
   & .drag-highlight {
     position: absolute;
-    transform: translate(calc(var(--x) * 4rem), calc((7 - var(--y)) * 4rem));
     left: 0;
     top: 0;
     pointer-events: none;
   }
 
+  /*
+   * A piece is moved by a transform of its own width, which is exactly one
+   * square. The size of a square is then no part of its transform, so resizing
+   * the board carries the piece along with it instead of playing the transition
+   * below from the square it used to be drawn on.
+   */
   & .board-piece {
-    width: 4rem;
-    height: 4rem;
+    width: var(--square-size);
+    height: var(--square-size);
+    transform: translate(calc(var(--x) * 100%), calc((7 - var(--y)) * 100%));
     object-fit: contain;
     z-index: 2;
 
@@ -78,32 +99,45 @@ body {
     }
 
     &.checkmated {
-      transform: translate(calc(var(--x) * 4rem), calc((7 - var(--y)) * 4rem))
+      transform: translate(calc(var(--x) * 100%), calc((7 - var(--y)) * 100%))
         rotate(90deg);
     }
   }
 
+  /* A pip is smaller than a square and a marker is offset within one, so these
+     are measured in squares instead. Nothing transitions them. */
+  & .pip,
+  & .border,
+  & .check-marker,
+  & .drag-highlight {
+    transform: translate(
+      calc(var(--x) * var(--square-size)),
+      calc((7 - var(--y)) * var(--square-size))
+    );
+  }
+
   & .pip {
-    width: 1rem;
-    height: 1rem;
+    /* A quarter of a square wide, centered in one. */
+    width: calc(var(--square-size) / 4);
+    height: calc(var(--square-size) / 4);
     border-radius: 50%;
     background-color: var(--pip-color);
-    left: 1.5rem;
-    top: 1.5rem;
+    left: calc(var(--square-size) * 0.375);
+    top: calc(var(--square-size) * 0.375);
 
     z-index: 3;
   }
 
   & .border {
-    width: 4rem;
-    height: 4rem;
+    width: var(--square-size);
+    height: var(--square-size);
     background: center / contain no-repeat url("./assets/corners.svg");
   }
 
   & .check-marker {
-    width: 4rem;
-    height: 4rem;
-    border-radius: 2rem;
+    width: var(--square-size);
+    height: var(--square-size);
+    border-radius: 50%;
     background: radial-gradient(
       circle at center,
       red,
@@ -114,8 +148,8 @@ body {
   }
 
   & .drag-highlight {
-    width: 4rem;
-    height: 4rem;
+    width: var(--square-size);
+    height: var(--square-size);
     background-color: var(--highlighted-square-color);
     opacity: 0.5;
     z-index: 1;
@@ -125,8 +159,10 @@ body {
     position: absolute;
     left: 0;
     top: 0;
-    width: 32rem;
-    height: 32rem;
+    /* The SVG is drawn in the board's 8x8 coordinate space, so these stay
+       equal to each other whatever a square measures. */
+    width: calc(8 * var(--square-size));
+    height: calc(8 * var(--square-size));
     overflow: visible;
     pointer-events: none;
     z-index: 3;
@@ -157,12 +193,6 @@ body {
   }
 }
 
-/*
- * Playing black shows the board from the other side. Only the transform that
- * turns a square into a place on the screen is mirrored: the pieces, pips and
- * markers go on setting --x and --y in board coordinates, and the grid is
- * turned around by reversing the rows and the cells within them.
- */
 .board-outer.black {
   & .grid {
     display: flex;
@@ -173,17 +203,23 @@ body {
     flex-direction: row-reverse;
   }
 
-  & .board-piece,
+  & .board-piece {
+    transform: translate(calc((7 - var(--x)) * 100%), calc(var(--y) * 100%));
+  }
+
+  & .board-piece.checkmated {
+    transform: translate(calc((7 - var(--x)) * 100%), calc(var(--y) * 100%))
+      rotate(-90deg);
+  }
+
   & .pip,
   & .border,
   & .check-marker,
   & .drag-highlight {
-    transform: translate(calc((7 - var(--x)) * 4rem), calc(var(--y) * 4rem));
-  }
-
-  & .board-piece.checkmated {
-    transform: translate(calc((7 - var(--x)) * 4rem), calc(var(--y) * 4rem))
-      rotate(-90deg);
+    transform: translate(
+      calc((7 - var(--x)) * var(--square-size)),
+      calc(var(--y) * var(--square-size))
+    );
   }
 
   /* The arrows are drawn in board coordinates, so the layer is turned whole. */
@@ -192,15 +228,22 @@ body {
   }
 }
 
-/* The player bars swap over with the board, so each sits on its own side. */
+/*
+ * The player bars swap over with the board, so each sits on its own side. The
+ * notice is turned back the other way, so that it stays above the board.
+ */
 .left-column.black {
   display: flex;
   flex-direction: column-reverse;
 }
 
+.left-column.black .game-notice {
+  order: 1;
+}
+
 .cell {
-  width: 4rem;
-  height: 4rem;
+  width: var(--square-size);
+  height: var(--square-size);
   position: relative;
   background-color: var(--light-square-color);
   touch-action: none;
@@ -221,22 +264,23 @@ body {
 .promotion-dialogue {
   border: 2px solid black;
   position: absolute;
-  top: 13rem;
-  left: 6rem;
+  /* Placed in board coordinates, so it follows the squares it covers. */
+  top: calc(3.25 * var(--square-size));
+  left: calc(1.5 * var(--square-size));
   background-color: #f5f5f5;
   z-index: 3;
 
   & button {
-    width: 5rem;
-    height: 5rem;
-    padding: 1rem;
+    width: calc(1.25 * var(--square-size));
+    height: calc(1.25 * var(--square-size));
+    padding: calc(var(--square-size) / 4);
     background-color: transparent;
     border: none;
     cursor: pointer;
 
     & img {
-      width: 3rem;
-      height: 3rem;
+      width: calc(0.75 * var(--square-size));
+      height: calc(0.75 * var(--square-size));
     }
 
     &:hover {
@@ -245,20 +289,10 @@ body {
   }
 
   & img {
-    width: 4rem;
-    height: 4rem;
+    width: var(--square-size);
+    height: var(--square-size);
     object-fit: contain;
   }
-}
-
-.sidebar {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  margin-left: 0.5rem;
-  /* Matches the history bar's grid (2rem + 5rem + 5rem + 2 gaps of 0.5rem)
-     plus its 2px borders, so long text can never widen the sidebar. */
-  flex: 0 0 13.25rem;
 }
 
 .score-widget {
@@ -275,7 +309,7 @@ body {
   gap: 0.25rem;
   /* A fixed height so the panel never grows or scrolls; the diagram and the
      reserved text lines are sized to fit exactly. */
-  flex: 0 0 14.5rem;
+  height: 14.5rem;
   padding: 0.5rem;
   overflow: hidden;
   border: 2px solid black;
@@ -393,14 +427,48 @@ body {
 #app {
   display: flex;
   justify-content: center;
+  container-type: inline-size;
+}
+
+#app:has(.left-column) {
+  display: grid;
+  grid-template-columns: 1fr 13.25rem;
+  grid-template-rows: auto 1fr auto;
+  grid-template-areas:
+    "board actions"
+    "board moves-log"
+    "board piece-info";
+  gap: var(--gap);
+  padding: var(--gap);
+  max-width: calc(45.75rem + 2 * var(--gap));
+  margin-inline: auto;
+}
+
+.left-column {
+  grid-area: board;
+  display: flex;
+  flex-direction: column;
+}
+
+.piece-info {
+  grid-area: piece-info;
 }
 
 .moves-log-container {
+  grid-area: moves-log;
   display: flex;
   flex-direction: column;
-  flex-grow: 1;
   background-color: var(--light-square-color);
   color: black;
+}
+
+.game-actions,
+.score-widget {
+  grid-area: actions;
+}
+
+#app:has(.score-widget:not(.hidden)) .game-actions {
+  display: none;
 }
 
 .moves-log-header {
@@ -458,11 +526,6 @@ button.play-button {
   padding: 1rem;
   margin-top: 1rem;
   font-size: 1.2rem;
-
-  /* The chief action of its screen, so it lights up in a colour of its own. */
-  &:hover:not(:disabled) {
-    background-color: #88cfcf;
-  }
 }
 
 .ai-options,
@@ -551,7 +614,7 @@ button.play-button {
 }
 
 .player-bar {
-  width: 32rem;
+  width: calc(8 * var(--square-size));
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -606,7 +669,8 @@ button.play-button {
 
 .game-actions {
   display: flex;
-  gap: 0.5rem;
+  /* The same gap as the grid, so the two buttons line up with the panels. */
+  gap: var(--gap);
 }
 
 .resign-button,
@@ -617,18 +681,14 @@ button.play-button {
   font-size: 0.9rem;
 }
 
-/* An armed resign button is asking to be clicked once more. */
 .resign-button.confirming {
   background-color: #f4b6b6;
 }
 
-/* So is an armed draw button, which two people at one board agree with. */
 .draw-button.confirming {
   background-color: #b6d4f4;
 }
 
-/* Before a player has moved the button calls the game off instead, which is not
-   a loss and so does not read as one. */
 .resign-button.abort-button {
   background-color: #f4e6b6;
 }
@@ -644,7 +704,6 @@ button.play-button {
     display: none;
   }
 
-  /* A problem the player needs to act on reads louder than a status line. */
   &.error {
     background-color: #f4b6b6;
   }
@@ -693,7 +752,6 @@ button.discoveries-button {
   background-color: var(--light-square-color);
   color: black;
 
-  /* Discovered cards open a modal describing the piece. */
   &:not(.undiscovered) {
     cursor: pointer;
 
@@ -703,19 +761,15 @@ button.discoveries-button {
     }
   }
 
-  /* Pieces the player has won with are marked with a border. */
   &.won {
     border: 3px solid var(--arrow-color);
   }
 
-  /* A piece that has never been in a finished game is a plain black card. */
   &.undiscovered {
     background-color: black;
   }
 }
 
-/* The line under the Play button, saying why a search stopped before it found
-   anybody to play. */
 .online-status-text {
   margin-top: 0.5rem;
   color: #8b1a1a;
@@ -763,7 +817,7 @@ button.discoveries-button {
   gap: 0.5rem;
   width: 14rem;
   padding: 0.5rem;
-  /* Matches the page background so the panel reads as the sidebar's twin. */
+  /* Matches the page background so the panel reads as the piece info's twin. */
   background-color: #462255;
   border: 2px solid black;
 }
@@ -771,4 +825,31 @@ button.discoveries-button {
 .modal-close {
   padding: 0.5rem;
   font-size: 1rem;
+}
+
+
+@media (max-width: 46.75rem) {
+  body {
+    --square-size: calc(100cqw / 8);
+  }
+
+  #app:has(.left-column) {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: repeat(3, auto);
+    grid-template-areas:
+      "board board"
+      "piece-info moves-log"
+      "actions actions";
+    max-width: none;
+  }
+
+  .moves-log {
+    grid-template-columns: 2rem minmax(0, 1fr) minmax(0, 1fr);
+
+    & > * {
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+  }
 }
