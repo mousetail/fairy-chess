@@ -48,6 +48,8 @@ export class HomeScreen implements Screen {
   private readonly options: HomeScreenOptions;
   /** Stops following the search, once the screen is showing. */
   private unwatch: (() => void) | null = null;
+  /** The timer that counts the wait up on the Play button, while one runs. */
+  private queueTimer: number | null = null;
 
   constructor(matchmaking: MatchmakingSession, options: HomeScreenOptions) {
     this.matchmaking = matchmaking;
@@ -154,13 +156,6 @@ export class HomeScreen implements Screen {
     nameLabel.appendChild(nameInput);
     onlineOptions.appendChild(nameLabel);
 
-    const onlineHint = document.createElement("p");
-    onlineHint.classList.add("option-hint");
-    onlineHint.textContent =
-      "Shown to your opponent. The chaos level below is what you will be " +
-      "matched at, give or take one level.";
-    onlineOptions.appendChild(onlineHint);
-
     const timeControlOptions = timeControls.map(timeControlLabel);
     const timeControlSlider = this.createSlider(
       "Time control",
@@ -173,13 +168,6 @@ export class HomeScreen implements Screen {
     );
     timeControlSlider.element.classList.add("time-control");
     onlineOptions.appendChild(timeControlSlider.element);
-
-    const timeControlHint = document.createElement("p");
-    timeControlHint.classList.add("option-hint");
-    timeControlHint.textContent =
-      "Minutes each, plus seconds added to your clock after every move. Your " +
-      "first move is free, so nothing runs down before you have played.";
-    onlineOptions.appendChild(timeControlHint);
 
     container.appendChild(onlineOptions);
 
@@ -210,29 +198,19 @@ export class HomeScreen implements Screen {
     );
     container.appendChild(chaosLevelSlider.element);
 
-    // The search takes the Play button's place rather than a page of its own:
-    // the player can keep reading their discoveries while they wait, and the
-    // board is put up whenever an opponent turns up.
-    const statusBox = document.createElement("div");
-    statusBox.classList.add("online-status");
-    statusBox.hidden = true;
-
-    const statusText = document.createElement("p");
-    statusText.classList.add("online-status-text");
-    statusBox.appendChild(statusText);
-
-    const cancelButton = document.createElement("button");
-    cancelButton.classList.add("cancel-search");
-    cancelButton.textContent = "Cancel";
-    cancelButton.addEventListener("click", () => this.matchmaking.cancel());
-    statusBox.appendChild(cancelButton);
-
-    container.appendChild(statusBox);
-
     const playButton = document.createElement("button");
     playButton.textContent = "Play";
     playButton.classList.add("play-button");
     container.appendChild(playButton);
+
+    // The search takes the Play button over rather than a page of its own: the
+    // player can keep reading their discoveries while they wait, the button says
+    // how long they have been waiting, and pressing it again gives the wait up.
+    // Only a search that failed has something extra to say, on the line below.
+    const statusText = document.createElement("p");
+    statusText.classList.add("online-status-text");
+    statusText.hidden = true;
+    container.appendChild(statusText);
 
     const currentSettings = (): HomeScreenSettings => ({
       mode: modeRadio.getValue() ?? modeOptions[0],
@@ -245,18 +223,29 @@ export class HomeScreen implements Screen {
     const report = () => this.options.onSettingsChange(currentSettings());
     container.addEventListener("change", report);
 
+    const showQueueTime = () => {
+      const began = this.matchmaking.searchStartedAt;
+      if (began === null) return;
+      playButton.textContent = `In Queue (${elapsedTime(Date.now() - began)})`;
+    };
+
     this.unwatch = this.matchmaking.watch((status) => {
-      const searching = status.state === "connecting" ||
-        status.state === "queued";
-      playButton.hidden = searching;
-      statusBox.hidden = !searching && status.state !== "error";
-      statusText.classList.toggle("error", status.state === "error");
-      statusText.textContent = describeStatus(
-        status,
-        this.matchmaking.complexityLabel,
-        this.matchmaking.timeControlLabel,
-      );
-      cancelButton.hidden = !searching;
+      if (isSearching(status)) {
+        // The wait is counted from when the search began rather than from when
+        // this screen went up, so a visit to the discoveries screen and back
+        // shows all of it. The timer keeps the count moving in between words
+        // from the server.
+        if (this.queueTimer === null) {
+          this.queueTimer = window.setInterval(showQueueTime, 1000);
+        }
+        showQueueTime();
+      } else {
+        this.stopQueueTimer();
+        playButton.textContent = "Play";
+      }
+
+      statusText.hidden = status.state !== "error";
+      statusText.textContent = status.state === "error" ? status.message : "";
     });
 
     discoveriesButton.addEventListener("click", () => {
@@ -269,7 +258,13 @@ export class HomeScreen implements Screen {
       report();
 
       if (settings.mode === "Online") {
-        // The search runs alongside this screen, so there is nothing to leave.
+        // The search runs alongside this screen, so the button toggles it: the
+        // first press starts the wait and a later one gives it up.
+        if (isSearching(this.matchmaking.status)) {
+          this.matchmaking.cancel();
+          return;
+        }
+
         this.matchmaking.queue(
           this.chaosLevelIndex(settings.chaosLevel),
           clampTimeControl(Number.parseInt(settings.timeControl, 10)),
@@ -411,29 +406,29 @@ export class HomeScreen implements Screen {
     };
   }
 
+  /** Stops the count of the wait shown on the Play button, if it is running. */
+  private stopQueueTimer(): void {
+    if (this.queueTimer === null) return;
+    window.clearInterval(this.queueTimer);
+    this.queueTimer = null;
+  }
+
   deactivate() {
+    this.stopQueueTimer();
     this.unwatch?.();
     this.unwatch = null;
   }
 }
 
-/** The line shown while a search is running, or after one has failed. */
-function describeStatus(
-  status: MatchmakingStatus,
-  level: string,
-  timeControl: string,
-): string {
-  const looking = `Looking for an opponent at ${level} (${timeControl})\u2026`;
-  switch (status.state) {
-    case "idle":
-      return "";
-    case "connecting":
-      return looking;
-    case "queued":
-      return status.waiting <= 1
-        ? looking
-        : `${looking} (${status.waiting} players waiting)`;
-    case "error":
-      return status.message;
-  }
+/** Whether `status` is a search for an opponent that is still going on. */
+function isSearching(status: MatchmakingStatus): boolean {
+  return status.state === "connecting" || status.state === "queued";
+}
+
+/** How long a wait has gone on for, as minutes and seconds: `4:31`. */
+function elapsedTime(milliseconds: number): string {
+  const totalSeconds = Math.max(0, Math.floor(milliseconds / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
 }

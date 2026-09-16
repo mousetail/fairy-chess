@@ -53,7 +53,7 @@ const pawnPieces = {
   },
   jumpingPawnLeft: {
     symbol: "j",
-    betza: "fWflF",
+    betza: "fWfrF",
     promotionAbility: "deny",
     promotesLikePawn: true,
     mobilityRegion: { white: "a* b* c* d*", black: "e* f* g* h*" },
@@ -69,7 +69,7 @@ const pawnPieces = {
   },
   jumpingPawnRight: {
     symbol: "l",
-    betza: "fWfrF",
+    betza: "fWflF",
     promotionAbility: "deny",
     promotesLikePawn: true,
     mobilityRegion: { white: "e* f* g* h*", black: "a* b* c* d*" },

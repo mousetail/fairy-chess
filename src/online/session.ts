@@ -147,6 +147,12 @@ export class MatchmakingSession {
    * from joining after all.
    */
   private searching = false;
+  /**
+   * The moment the search now running began. A screen that shows how long the
+   * player has been waiting counts from this, so one put up in the middle of a
+   * search shows the whole wait rather than starting again from nothing.
+   */
+  private beganAt: number | null = null;
 
   constructor(options: MatchmakingSessionOptions) {
     this.options = options;
@@ -168,6 +174,15 @@ export class MatchmakingSession {
     return () => {
       this.watchers.delete(listener);
     };
+  }
+
+  /**
+   * When the search now running began, or `null` when there is none. The count
+   * starts as soon as the player asks to be matched, before the queue answers.
+   */
+  get searchStartedAt(): number | null {
+    const state = this.currentStatus.state;
+    return state === "connecting" || state === "queued" ? this.beganAt : null;
   }
 
   /** The level the player asked for, named the way the server names it. */
@@ -195,6 +210,10 @@ export class MatchmakingSession {
     };
     this.searching = true;
     if (this.currentStatus.state !== "queued") {
+      // A search that has not reached the queue yet is a new one, so its clock
+      // starts here. One already queued keeps both its place and its clock when
+      // the player only changes their preference.
+      this.beganAt = Date.now();
       this.setStatus({ state: "connecting" });
     }
 

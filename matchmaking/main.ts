@@ -37,7 +37,7 @@ export interface ServerOptions {
   heartbeatMs?: number;
   /** The largest message accepted from a client, in UTF-16 code units. */
   maxMessageBytes?: number;
-  /** Overridable for tests, which want a deterministic colour assignment. */
+  /** Overridable for tests, which want deterministic colours and settings. */
   random?: () => number;
 }
 

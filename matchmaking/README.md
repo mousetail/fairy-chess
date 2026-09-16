@@ -98,17 +98,20 @@ The setting a player picks on the home screen is the _chaos level_: an index
 into `chaosLevels` in `../src/replacement-rules.ts`, from `0` (normal chess) to
 `4` (full random asymmetric). The server calls this the game's **complexity**.
 
-A player is paired with anyone whose preference is within one level of their
-own. When two players are paired, the game is played at the level both of them
-accept that is nearest to what they asked for jointly, and a tie goes to the
-less chaotic level — so asking for "one fairy piece" and being matched against
-someone who asked for "several fairy pieces" plays at "one fairy piece".
+A player is willing to play a game one level either side of the one they asked
+for, so two players are paired when their requests are at most two levels apart.
+The game is played at a level both of them accept: when their requests are two
+apart that is the level in between, and when they are one apart either request
+will do, so a coin decides between them rather than favouring the more cautious
+player. Asking for "one fairy piece" and being matched against someone who asked
+for level 3 therefore plays at level 2, "several fairy pieces", while a match
+against someone one level away plays at whichever of the two the coin picks.
 
-The clock is not negotiable the same way. A player also picks a **time control**
-— an index into `timeControls` in `../src/online/time-controls.ts`, shown as
-`1+2`, `3+2`, `5+5` or `10+10` — and two players are only paired when they asked
-for the same one. A clock is either the one you wanted or it is not, so there is
-nothing to average.
+The clock works the same way. A player also picks a **time control** — an index
+into `timeControls` in `../src/online/time-controls.ts`, shown as `1+2`, `3+2`,
+`5+5` or `10+10` — and accepts a game one control either side of it. Two players
+up to two controls apart are paired at a control both accept, so a clock can be
+a step quicker or slower than the one you asked for.
 
 Waiting players are paired in the order they arrived, so someone who has been
 waiting a long time is served before a later arrival who would fit equally well.

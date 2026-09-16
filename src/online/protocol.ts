@@ -82,7 +82,8 @@ export type ClientMessage =
   /**
    * Ask to be matched. `complexity` is an index into the chaos levels and
    * `timeControl` an index into the time controls; the server may pair the
-   * player with anyone within one chaos level who wants the same clock.
+   * player with anyone up to two steps away on either, since a game one step
+   * from each player's request is played at the step in between.
    */
   | { type: "join"; complexity: number; timeControl: number; name?: string }
   /** Leave the queue without waiting for an opponent. */

@@ -19,6 +19,7 @@ import { GameSession, type MoveRequest } from "./game-session.ts";
 import {
   canMatch,
   chooseComplexity,
+  chooseTimeControl,
   clampComplexity,
   type Preference,
 } from "./matchmaking.ts";
@@ -353,9 +354,14 @@ export class Lobby {
   }
 
   private startGame(first: WaitingPlayer, second: WaitingPlayer): void {
-    const complexity = chooseComplexity(first.complexity, second.complexity);
-    // Both players asked for the same clock, so either one names it.
-    const timeControl = describeTimeControl(first.timeControl);
+    const complexity = chooseComplexity(
+      first.complexity,
+      second.complexity,
+      this.random,
+    );
+    const timeControl = describeTimeControl(
+      chooseTimeControl(first.timeControl, second.timeControl, this.random),
+    );
 
     // Which of the two players gets white is decided by the server, so neither
     // player can pick a side.

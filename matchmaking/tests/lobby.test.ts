@@ -73,8 +73,8 @@ Deno.test("players within one level are paired into a game", () => {
   const secondMatch = second.last("matched");
   assert.ok(firstMatch && secondMatch, "both players should be matched");
   assert.equal(firstMatch.gameId, secondMatch.gameId);
-  // 1 and 2 are a level apart, so they are matched at the less chaotic of the
-  // two levels.
+  // 1 and 2 are a level apart, so either is acceptable; this lobby's coin came
+  // up low and picked 1.
   assert.equal(firstMatch.complexity, 1);
   assert.equal(firstMatch.complexityLabel, "one fairy piece");
   assert.equal(firstMatch.color, "white");
@@ -82,6 +82,37 @@ Deno.test("players within one level are paired into a game", () => {
   assert.equal(firstMatch.opponentName, "Bob");
   assert.equal(secondMatch.opponentName, "Ada");
   assert.equal(firstMatch.board.pieces.length, 32);
+  assert.equal(lobby.waitingCount, 0);
+  assert.equal(lobby.gameCount, 1);
+});
+
+Deno.test("a level one apart is decided by the lobby's coin", () => {
+  const lobby = new Lobby({ random: () => 0.99, now: () => 0 });
+  const first = new FakeClient("first");
+  const second = new FakeClient("second");
+
+  join(lobby, first, 1, "Ada");
+  join(lobby, second, 2, "Bob");
+
+  // The coin came up high, so the more chaotic of the two levels wins.
+  assert.equal(first.last("matched")?.complexity, 2);
+});
+
+Deno.test("players two levels apart are paired on the level between them", () => {
+  const lobby = deterministicLobby();
+  const first = new FakeClient("first");
+  const second = new FakeClient("second");
+
+  join(lobby, first, 1, "Ada");
+  join(lobby, second, 3, "Bob");
+
+  const firstMatch = first.last("matched");
+  const secondMatch = second.last("matched");
+  assert.ok(firstMatch && secondMatch, "both players should be matched");
+  assert.equal(firstMatch.gameId, secondMatch.gameId);
+  // Each accepts a level one away from their own, and 2 is the one they share.
+  assert.equal(firstMatch.complexity, 2);
+  assert.equal(firstMatch.complexityLabel, "several fairy pieces");
   assert.equal(lobby.waitingCount, 0);
   assert.equal(lobby.gameCount, 1);
 });
@@ -102,7 +133,25 @@ Deno.test("a game is played with the clock both players asked for", () => {
   });
 });
 
-Deno.test("players who want different clocks are not paired", () => {
+Deno.test("players two clocks apart are paired on the clock between them", () => {
+  const lobby = deterministicLobby();
+  const first = new FakeClient("first");
+  const second = new FakeClient("second");
+
+  join(lobby, first, 0, "Ada", 0);
+  join(lobby, second, 0, "Bob", 2);
+
+  // 1 (3+2) is the clock both accept, so the game is played with it rather
+  // than either player's own request.
+  assert.deepEqual(first.last("matched")?.timeControl, {
+    index: 1,
+    label: "3+2",
+    initialMs: 180_000,
+    incrementMs: 2_000,
+  });
+});
+
+Deno.test("players whose clocks are too far apart are not paired", () => {
   const lobby = deterministicLobby();
   const quick = new FakeClient("quick");
   const slow = new FakeClient("slow");
@@ -156,7 +205,8 @@ Deno.test("the longest waiting player is paired first", () => {
   const arrival = new FakeClient("arrival");
 
   join(lobby, waiting, 1);
-  join(lobby, later, 3);
+  // Four is out of reach of one, so `later` cannot jump the queue.
+  join(lobby, later, 4);
   join(lobby, arrival, 2);
 
   assert.ok(waiting.last("matched"), "the longest wait should be served");

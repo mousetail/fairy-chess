@@ -76,6 +76,9 @@ function startLocalServer(): { running: RunningServer; origin: string } {
     port: 0,
     hostname: "127.0.0.1",
     heartbeatMs: 0,
+    // A fixed coin, so the colours and the settings a game is played at are the
+    // same on every run.
+    random: () => 0,
   });
   const address = running.server.addr;
   if (address.transport !== "tcp") throw new Error("expected a TCP listener");
@@ -108,7 +111,7 @@ Deno.test("two clients are matched and play a game over a websocket", async () =
     assert.deepEqual(welcome.timeControlLabels, ["1+2", "3+2", "5+5", "10+10"]);
 
     // The two players ask for neighbouring levels, so they may be paired; the
-    // game is then played at the less chaotic of the two.
+    // coin came up low, so the game is played at the less chaotic of the two.
     first.send({ type: "join", complexity: 0, timeControl: 1, name: "Ada" });
     second.send({ type: "join", complexity: 1, timeControl: 1, name: "Bob" });
 
