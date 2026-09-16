@@ -18,7 +18,19 @@ jobs:
           cache: 'npm'
       - name: Install dependencies
         run: npm ci
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
       - name: Type check
         run: npx tsc --noEmit
+      - name: Type check the matchmaking server, as an editor sees it
+        run: npx tsc --noEmit -p matchmaking/tsconfig.json
       - name: Test
         run: npm test
+      - name: Type check the matchmaking server
+        run: deno task check
+        working-directory: matchmaking
+      - name: Test the matchmaking server
+        run: deno task test
+        working-directory: matchmaking

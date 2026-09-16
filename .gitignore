@@ -12,6 +12,11 @@ dist
 dist-ssr
 *.local
 
+# Local configuration; `.env.example` is the checked-in template for it.
+.env
+.env.*
+!.env.example
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
