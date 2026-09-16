@@ -137,7 +137,7 @@ test("every piece type's Betza notation matches the engine", async () => {
   const engine = await createEngine();
   try {
     const betzas = [
-      ...new Set(Object.values(pieceTypes).map((type) => type.betza)),
+      ...new Set(Object.values(pieceTypes).map((type: PieceType) => type.betza)),
     ];
     await assertBetzasMatchEngine(engine, "piece", betzas);
   } finally {

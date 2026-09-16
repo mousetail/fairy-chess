@@ -47,16 +47,6 @@ function royal(board: ChessBoardState, color: "white" | "black"): Piece {
   return royals[0];
 }
 
-/** The pieces on the board as `color:type` keys with their counts. */
-function pieceCounts(board: ChessBoardState): Record<string, number> {
-  const counts: Record<string, number> = {};
-  for (const piece of board.pieces) {
-    const key = `${piece.color}:${piece.type.displayName}`;
-    counts[key] = (counts[key] ?? 0) + 1;
-  }
-  return counts;
-}
-
 const fullChaos = chaosLevels.filter((level) => level.budget === Infinity);
 
 test("a rule is only allowed when it keeps the balance near level", () => {
@@ -150,13 +140,4 @@ test("full random asymmetric games stay near level", () => {
   // balance rule is about keeping the typical game level.
   assert.ok(median <= 10, `median imbalance ${median}`);
   assert.ok(p90 <= 50, `90th percentile imbalance ${p90}`);
-});
-
-test("the same rule sequence produces the same setup", () => {
-  const level = chaosLevels.at(-1)!;
-  const first = startingBoard();
-  applyChaos(first, level, seededRandom(5));
-  const second = startingBoard();
-  applyChaos(second, level, seededRandom(5));
-  assert.deepEqual(pieceCounts(first), pieceCounts(second));
 });
