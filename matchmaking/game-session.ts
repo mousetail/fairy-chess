@@ -130,6 +130,26 @@ export class GameSession {
     return result;
   }
 
+  /** Ends the game, awarding the win to `color`'s opponent, who is in time. */
+  timeout(color: Color): GameResult {
+    const result: GameResult = {
+      status: "timeout",
+      winner: invertColor(color),
+    };
+    this.result = result;
+    return result;
+  }
+
+  /**
+   * Ends the game with no result, because a player called it off before either
+   * side had moved. Nothing has been decided, so nobody is credited with it.
+   */
+  abort(): GameResult {
+    const result: GameResult = { status: "abort", winner: null };
+    this.result = result;
+    return result;
+  }
+
   /** Ends the game level, because both players agreed to it. */
   draw(): GameResult {
     const result: GameResult = { status: "draw", winner: "draw" };
@@ -169,6 +189,8 @@ export class GameSession {
     if (endStatus !== undefined && matedColor !== undefined) {
       this.result = endStatus === "checkmate"
         ? { status: "checkmate", winner: invertColor(matedColor) }
+        : endStatus === "repetition"
+        ? { status: "repetition", winner: "draw" }
         : { status: "stalemate", winner: "draw" };
     }
 

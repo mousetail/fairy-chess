@@ -18,6 +18,8 @@ export interface HomeScreenSettings {
   difficulty: string;
   /** The index of the chaos level slider, as a string. */
   chaosLevel: string;
+  /** The index of the online time control slider, as a string. */
+  timeControl: string;
   /** The name to show an online opponent, or an empty string for none. */
   playerName: string;
 }
@@ -28,6 +30,7 @@ export const defaultSettings: HomeScreenSettings = {
   minTurnTime: "1",
   difficulty: "1",
   chaosLevel: "2",
+  timeControl: "1",
   playerName: "",
 };
 
@@ -88,6 +91,7 @@ function sanitize(value: unknown): HomeScreenSettings {
     minTurnTime: text(record, "minTurnTime"),
     difficulty: text(record, "difficulty"),
     chaosLevel: text(record, "chaosLevel"),
+    timeControl: text(record, "timeControl"),
     playerName: text(record, "playerName"),
   };
 }

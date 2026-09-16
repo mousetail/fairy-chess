@@ -135,6 +135,37 @@ Deno.test("checkmate is reported with the winner", () => {
   assert.equal(rejection.reason, "game-over");
 });
 
+Deno.test("a position repeated three times is drawn", () => {
+  const session = new GameSession(0);
+  // The knights shuffle out and back, which brings the position the game began
+  // in back to the board every four plies.
+  const shuffle: [number, Color, [number, number], [number, number]][] = [
+    [17, "white", [1, 0], [2, 2]], // Nc3
+    [25, "black", [1, 7], [2, 5]], // Nc6
+    [17, "white", [2, 2], [1, 0]], // Nb1
+    [25, "black", [2, 5], [1, 7]], // Nb8
+  ];
+
+  for (let ply = 0; ply < 8; ply++) {
+    const [id, color, from, to] = shuffle[ply % shuffle.length];
+    const outcome = play(session, color, id, from, to);
+    assert.ok(outcome.ok, `ply ${ply + 1} was refused`);
+    // Two rounds of the shuffle is the third time the game has been in the
+    // position it began in, which is where it is drawn.
+    assert.deepEqual(
+      outcome.result,
+      ply === 7 ? { status: "repetition", winner: "draw" } : undefined,
+      `ply ${ply + 1}`,
+    );
+  }
+  assert.deepEqual(session.finished, { status: "repetition", winner: "draw" });
+
+  assert.equal(
+    expectRefused(play(session, "white", 17, [1, 0], [2, 2])).reason,
+    "game-over",
+  );
+});
+
 Deno.test("reaching the far rank offers a choice of promotion", () => {
   const session = new GameSession(0);
   expectAccepted(play(session, "white", 0, [0, 1], [0, 3])); // a4
@@ -200,6 +231,29 @@ Deno.test("an agreed draw ends the game level", () => {
   const session = new GameSession(0);
   assert.deepEqual(session.draw(), { status: "draw", winner: "draw" });
   assert.deepEqual(session.finished, { status: "draw", winner: "draw" });
+  assert.equal(
+    expectRefused(play(session, "white", 4, [4, 1], [4, 3])).reason,
+    "game-over",
+  );
+});
+
+Deno.test("a player who runs out of time loses", () => {
+  const session = new GameSession(0);
+  assert.deepEqual(session.timeout("black"), {
+    status: "timeout",
+    winner: "white",
+  });
+  assert.deepEqual(session.finished, { status: "timeout", winner: "white" });
+  assert.equal(
+    expectRefused(play(session, "white", 4, [4, 1], [4, 3])).reason,
+    "game-over",
+  );
+});
+
+Deno.test("a game called off before it began has no result", () => {
+  const session = new GameSession(0);
+  assert.deepEqual(session.abort(), { status: "abort", winner: null });
+  assert.deepEqual(session.finished, { status: "abort", winner: null });
   assert.equal(
     expectRefused(play(session, "white", 4, [4, 1], [4, 3])).reason,
     "game-over",

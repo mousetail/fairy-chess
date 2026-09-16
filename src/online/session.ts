@@ -8,8 +8,14 @@ import {
   type MoveRejection,
   type MoveRequest,
   type ServerMessage,
+  type TimeControlSpec,
 } from "./protocol.ts";
 import type { SerializedBoardState } from "./serialization.ts";
+import {
+  clampTimeControl,
+  timeControlLabel,
+  timeControls,
+} from "./time-controls.ts";
 
 /**
  * The player's connection to the matchmaking server, which outlives any screen.
@@ -31,12 +37,27 @@ export type MatchmakingStatus =
 
 /** How a game in progress tells the screen showing it what happened. */
 export interface GameListener {
-  /** The position after an accepted move; the board is replaced with it. */
-  moved(board: SerializedBoardState, pgn: string, inCheck: boolean): void;
+  /**
+   * The position after an accepted move; the board is replaced with it. `color`
+   * is the side that just moved, which is how the board learns it may no longer
+   * call the game off.
+   */
+  moved(
+    board: SerializedBoardState,
+    pgn: string,
+    inCheck: boolean,
+    color: Color,
+  ): void;
+  /**
+   * What each player's clock has left, and whose is running. Sent on every move
+   * and again while a clock runs, so a client that ticked on its own catches
+   * up with the server.
+   */
+  clock(white: number, black: number, running: Color | null): void;
   /** A move this browser asked for was refused. */
   moveRejected(rejection: MoveRejection): void;
   /** The game ended. */
-  gameOver(status: GameOverStatus, winner: Color | "draw"): void;
+  gameOver(status: GameOverStatus, winner: Color | "draw" | null): void;
   /** The opponent's connection dropped, so this browser wins. */
   opponentLeft(winner: Color): void;
   /** Someone offered a draw, naming the side that offered. */
@@ -58,6 +79,8 @@ export interface OnlineGame {
   /** The chaos level the server picked for this game. */
   readonly complexity: number;
   readonly complexityLabel: string;
+  /** The clocks the server picked for this game. */
+  readonly timeControl: TimeControlSpec;
   /** The starting position, as the server laid it out. */
   readonly board: SerializedBoardState;
   /**
@@ -70,6 +93,11 @@ export interface OnlineGame {
   requestMove(request: MoveRequest): void;
   /** Ends the game in the opponent's favour. */
   resign(): void;
+  /**
+   * Calls the game off, before this browser has moved. The game ends with no
+   * result rather than in a loss.
+   */
+  abort(): void;
   /** Offers a draw, which the game is drawn on once the opponent offers too. */
   offerDraw(): void;
 }
@@ -78,6 +106,7 @@ export interface OnlineGame {
 interface GameSender {
   move(request: MoveRequest): void;
   resign(): void;
+  abort(): void;
   offerDraw(): void;
 }
 
@@ -103,8 +132,12 @@ export class MatchmakingSession {
   private labels: string[] = chaosLevels.map((level) => level.label);
   private minComplexity = 0;
   private maxComplexity = chaosLevels.length - 1;
+  /** How many clocks the server says it knows, until it says. */
+  private timeControlCount = timeControls.length;
   /** What the player last asked to be matched at. */
-  private request: { complexity: number; name: string } | null = null;
+  private request:
+    | { complexity: number; timeControl: number; name: string }
+    | null = null;
   /**
    * Whether a search is wanted. A socket that is still opening joins when it
    * opens, so this is what keeps a search that was called off in the meantime
@@ -140,13 +173,23 @@ export class MatchmakingSession {
     return this.labels[complexity] ?? chaosLevels[0].label;
   }
 
+  /** The clock the player asked for, named the way the slider names it. */
+  get timeControlLabel(): string {
+    const index = this.clampClock(this.request?.timeControl ?? 0);
+    return timeControlLabel(timeControls[index]);
+  }
+
   /**
-   * Asks to be matched at a chaos level, opening the socket when there is not
-   * one already. Asking again while queued only updates the preference, and
-   * keeps the player's place in the queue.
+   * Asks to be matched at a chaos level with a clock, opening the socket when
+   * there is not one already. Asking again while queued only updates the
+   * preference, and keeps the player's place in the queue.
    */
-  queue(complexity: number, name: string): void {
-    this.request = { complexity: this.clamp(complexity), name };
+  queue(complexity: number, timeControl: number, name: string): void {
+    this.request = {
+      complexity: this.clamp(complexity),
+      timeControl: this.clampClock(timeControl),
+      name,
+    };
     this.searching = true;
     if (this.currentStatus.state !== "queued") {
       this.setStatus({ state: "connecting" });
@@ -159,7 +202,9 @@ export class MatchmakingSession {
     }
     // A socket that is still opening joins when it opens instead, so the join
     // always follows whatever the player did before it.
-    if (client.isOpen) client.join(this.request.complexity, name);
+    if (client.isOpen) {
+      client.join(this.request.complexity, this.request.timeControl, name);
+    }
   }
 
   /**
@@ -196,7 +241,7 @@ export class MatchmakingSession {
     if (this.client !== client) return;
     const request = this.request;
     if (!this.searching || !request) return;
-    client.join(request.complexity, request.name);
+    client.join(request.complexity, request.timeControl, request.name);
   }
 
   private receive(message: ServerMessage): void {
@@ -233,6 +278,7 @@ export class MatchmakingSession {
         this.game = null;
         return;
       case "moved":
+      case "clock":
       case "moveRejected":
       case "drawOffered":
         this.game?.receive(message);
@@ -255,10 +301,16 @@ export class MatchmakingSession {
     this.labels = message.complexityLabels;
     this.minComplexity = message.minComplexity;
     this.maxComplexity = message.maxComplexity;
+    // A deployment may offer fewer clocks than this build knows about, so the
+    // ones it does offer are the only ones worth asking for.
+    if (message.timeControlLabels.length > 0) {
+      this.timeControlCount = message.timeControlLabels.length;
+    }
     if (this.request) {
       this.request = {
         ...this.request,
         complexity: this.clamp(this.request.complexity),
+        timeControl: this.clampClock(this.request.timeControl),
       };
     }
     // The level may have been narrowed, so anything showing it is told again.
@@ -275,11 +327,13 @@ export class MatchmakingSession {
         opponentName: message.opponentName,
         complexity: message.complexity,
         complexityLabel: message.complexityLabel,
+        timeControl: message.timeControl,
         board: message.board,
       },
       {
         move: (request) => this.client?.move(request),
         resign: () => this.client?.resign(),
+        abort: () => this.client?.abort(),
         offerDraw: () => this.client?.offerDraw(),
       },
     );
@@ -329,6 +383,11 @@ export class MatchmakingSession {
     const level = Number.isFinite(complexity) ? Math.round(complexity) : 0;
     return Math.min(this.maxComplexity, Math.max(this.minComplexity, level));
   }
+
+  /** The nearest clock to `index` the server has said it knows. */
+  private clampClock(index: number): number {
+    return Math.min(clampTimeControl(index), this.timeControlCount - 1);
+  }
 }
 
 /** One game, and the connection it is played over. */
@@ -338,6 +397,7 @@ class Game implements OnlineGame {
   readonly opponentName: string;
   readonly complexity: number;
   readonly complexityLabel: string;
+  readonly timeControl: TimeControlSpec;
   readonly board: SerializedBoardState;
 
   private readonly sender: GameSender;
@@ -350,6 +410,7 @@ class Game implements OnlineGame {
       opponentName: string;
       complexity: number;
       complexityLabel: string;
+      timeControl: TimeControlSpec;
       board: SerializedBoardState;
     },
     sender: GameSender,
@@ -359,6 +420,7 @@ class Game implements OnlineGame {
     this.opponentName = init.opponentName;
     this.complexity = init.complexity;
     this.complexityLabel = init.complexityLabel;
+    this.timeControl = init.timeControl;
     this.board = init.board;
     this.sender = sender;
   }
@@ -375,6 +437,10 @@ class Game implements OnlineGame {
     this.sender.resign();
   }
 
+  abort(): void {
+    this.sender.abort();
+  }
+
   offerDraw(): void {
     this.sender.offerDraw();
   }
@@ -383,6 +449,7 @@ class Game implements OnlineGame {
   receive(
     message:
       | Extract<ServerMessage, { type: "moved" }>
+      | Extract<ServerMessage, { type: "clock" }>
       | Extract<ServerMessage, { type: "moveRejected" }>
       | Extract<ServerMessage, { type: "gameOver" }>
       | Extract<ServerMessage, { type: "opponentLeft" }>
@@ -393,7 +460,10 @@ class Game implements OnlineGame {
 
     switch (message.type) {
       case "moved":
-        listener.moved(message.board, message.pgn, message.inCheck);
+        listener.moved(message.board, message.pgn, message.inCheck, message.color);
+        return;
+      case "clock":
+        listener.clock(message.white, message.black, message.running);
         return;
       case "moveRejected":
         listener.moveRejected(message.rejection);

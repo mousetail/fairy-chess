@@ -30,6 +30,7 @@ test("settings survive a save and load round trip", () => {
     minTurnTime: "2.5",
     difficulty: "5",
     chaosLevel: "4",
+    timeControl: "3",
     playerName: "Ada",
   };
 
@@ -66,6 +67,7 @@ test("fields of the wrong type are replaced one at a time", () => {
       minTurnTime: 4,
       difficulty: null,
       chaosLevel: "1",
+      timeControl: 2,
       playerName: ["Ada"],
     }),
   });
@@ -75,6 +77,7 @@ test("fields of the wrong type are replaced one at a time", () => {
     minTurnTime: defaultSettings.minTurnTime,
     difficulty: defaultSettings.difficulty,
     chaosLevel: "1",
+    timeControl: defaultSettings.timeControl,
     playerName: defaultSettings.playerName,
   });
 });

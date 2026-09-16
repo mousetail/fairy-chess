@@ -92,12 +92,15 @@ export class MatchmakingClient {
     });
   }
 
-  /** Asks to be matched at `complexity`. Sending it again only updates it. */
-  join(complexity: number, name?: string): void {
+  /**
+   * Asks to be matched at `complexity` and `timeControl`. Sending it again only
+   * updates the preference.
+   */
+  join(complexity: number, timeControl: number, name?: string): void {
     if (name === undefined || name.trim() === "") {
-      this.send({ type: "join", complexity });
+      this.send({ type: "join", complexity, timeControl });
     } else {
-      this.send({ type: "join", complexity, name });
+      this.send({ type: "join", complexity, timeControl, name });
     }
   }
 
@@ -120,6 +123,14 @@ export class MatchmakingClient {
   /** Ends the game in the opponent's favour. */
   resign(): void {
     this.send({ type: "resign" });
+  }
+
+  /**
+   * Calls the game off. Only allowed before this player has moved, and it ends
+   * the game with no result rather than in a loss.
+   */
+  abort(): void {
+    this.send({ type: "abort" });
   }
 
   /**

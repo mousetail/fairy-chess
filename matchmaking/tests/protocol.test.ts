@@ -101,11 +101,16 @@ Deno.test("an unknown piece type is rejected", () => {
 
 Deno.test("a well-formed join is accepted", () => {
   const parsed = parseClientMessage(
-    JSON.stringify({ type: "join", complexity: 2, name: "Ada" }),
+    JSON.stringify({
+      type: "join",
+      complexity: 2,
+      timeControl: 1,
+      name: "Ada",
+    }),
   );
   assert.deepEqual(parsed, {
     ok: true,
-    message: { type: "join", complexity: 2, name: "Ada" },
+    message: { type: "join", complexity: 2, timeControl: 1, name: "Ada" },
   });
 });
 
@@ -138,7 +143,11 @@ Deno.test("malformed messages are refused with a reason", () => {
     [JSON.stringify({ type: "explode" }), /Unknown message type/],
     [JSON.stringify({ type: "join" }), /numeric complexity/],
     [
-      JSON.stringify({ type: "join", complexity: 1, name: 5 }),
+      JSON.stringify({ type: "join", complexity: 1 }),
+      /numeric time control/,
+    ],
+    [
+      JSON.stringify({ type: "join", complexity: 1, timeControl: 0, name: 5 }),
       /name must be a string/,
     ],
     [
@@ -197,7 +206,7 @@ Deno.test("malformed messages are refused with a reason", () => {
 });
 
 Deno.test("the remaining client messages need no fields", () => {
-  for (const type of ["cancelQueue", "resign", "offerDraw", "pong"]) {
+  for (const type of ["cancelQueue", "resign", "abort", "offerDraw", "pong"]) {
     const parsed = parseClientMessage(JSON.stringify({ type }));
     assert.deepEqual(parsed, { ok: true, message: { type } });
   }

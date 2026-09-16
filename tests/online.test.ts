@@ -55,7 +55,7 @@ test("a message sent before the socket opens is held until it does", () => {
   const socket = new FakeSocket();
   const { client } = clientOver(socket);
 
-  client.join(2, "Ada");
+  client.join(2, 1, "Ada");
   client.resign();
   assert.deepEqual(
     socket.sent,
@@ -65,7 +65,7 @@ test("a message sent before the socket opens is held until it does", () => {
 
   socket.emit("open", {});
   assert.deepEqual(socket.sent, [
-    '{"type":"join","complexity":2,"name":"Ada"}',
+    '{"type":"join","complexity":2,"timeControl":1,"name":"Ada"}',
     '{"type":"resign"}',
   ]);
 });
@@ -75,8 +75,10 @@ test("an unnamed player joins without a name field", () => {
   const { client } = clientOver(socket);
   socket.emit("open", {});
 
-  client.join(0, "   ");
-  assert.deepEqual(socket.sent, ['{"type":"join","complexity":0}']);
+  client.join(0, 2, "   ");
+  assert.deepEqual(socket.sent, [
+    '{"type":"join","complexity":0,"timeControl":2}',
+  ]);
 });
 
 test("a move is sent in the shape the server expects", () => {
@@ -105,6 +107,15 @@ test("a draw offer is sent as an offer, so it can be matched", () => {
   assert.deepEqual(socket.sent, ['{"type":"offerDraw"}']);
 });
 
+test("calling a game off is sent as an abort", () => {
+  const socket = new FakeSocket();
+  const { client } = clientOver(socket);
+  socket.emit("open", {});
+
+  client.abort();
+  assert.deepEqual(socket.sent, ['{"type":"abort"}']);
+});
+
 test("an unreachable server is reported by ready", async () => {
   const socket = new FakeSocket();
   const { client } = clientOver(socket);
@@ -112,7 +123,7 @@ test("an unreachable server is reported by ready", async () => {
   socket.emit("error", {});
   await assert.rejects(client.ready, /Could not reach the matchmaking server/);
 
-  client.join(1);
+  client.join(1, 0);
   socket.emit("open", {});
   assert.deepEqual(socket.sent, []);
 });

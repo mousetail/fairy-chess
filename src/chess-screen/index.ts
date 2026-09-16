@@ -10,7 +10,7 @@ import {
   type Piece,
   type SpecialMovement,
 } from "../chess-board.ts";
-import { ChessGame, type GameStatus, type Player } from "../chess-game.ts";
+import { ChessGame, type Player } from "../chess-game.ts";
 import type { Tile } from "../chess-tile.ts";
 import { recordGame, type GameOutcome } from "../discoveries.ts";
 import { HistoryBar } from "../history-bar.ts";
@@ -18,7 +18,12 @@ import { PieceInfoBar } from "../piece-info-bar.ts";
 import { chaosLevels } from "../replacement-rules.ts";
 import type { Screen } from "../screen.ts";
 import { AiPlayer } from "../ai/ai-player.ts";
-import type { Color, MoveRejection, MoveRequest } from "../online/protocol.ts";
+import type {
+  Color,
+  MoveRejection,
+  MoveRequest,
+  TimeControlSpec,
+} from "../online/protocol.ts";
 import {
   deserializeBoardState,
   pieceTypeFromKey,
@@ -31,6 +36,7 @@ import { tileFromEvent } from "./board-geometry.ts";
 import { getImageFromPromise } from "./piece-images.ts";
 import { PieceDragController } from "./piece-drag-controller.ts";
 import { createPromotionDialogue } from "./promotion-dialogue.ts";
+import { describeResult, isDrawn, type GameEndStatus } from "./result-text.ts";
 import type { PieceType } from "../pieces/piece_types/index.ts";
 
 /** The pieces `mine` has that `theirs` does not, ordered from least to most valuable. */
@@ -58,6 +64,19 @@ function knownPieceType(key: string): PieceType[] {
   } catch {
     return [];
   }
+}
+
+/**
+ * A clock reading, as `M:SS`, or as seconds with a tenth below ten seconds,
+ * where the last moments of a game are decided.
+ */
+function formatClock(ms: number): string {
+  const left = Math.max(0, ms);
+  if (left < 10_000) return (left / 1000).toFixed(1);
+  const totalSeconds = Math.ceil(left / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
 }
 
 /** A player-facing explanation of a move the server refused. */
@@ -94,12 +113,6 @@ export interface ChessScreenOptions {
   playerNames?: Partial<Record<Color, string>>;
   /** Set when the game is played against someone over the network. */
   online?: OnlineOpponent;
-  /**
-   * The name of the level the game is played at, shown while it lasts. Only a
-   * game the server laid out has one: a local game uses the level the player
-   * picked, which the home screen has already shown them.
-   */
-  levelLabel?: string;
   onPlayAgain?: () => void;
 }
 
@@ -107,19 +120,20 @@ export interface ChessScreenOptions {
 export interface OnlineOpponent {
   /** The colour this browser plays. */
   color: Color;
+  /** The clocks the server picked for this game. */
+  timeControl: TimeControlSpec;
   /** Asks the server to play a move; the board changes when it accepts. */
   requestMove(request: MoveRequest): void;
   /** Asks the server to end the game in the opponent's favour. */
   resign(): void;
+  /**
+   * Asks the server to call the game off. Only allowed before this browser has
+   * moved, and it ends the game with no result rather than in a loss.
+   */
+  abort(): void;
   /** Offers a draw, which the game is drawn on once the opponent offers too. */
   offerDraw(): void;
 }
-
-/**
- * How a game ended. The local rules only ever reach the first two; only the
- * server can call a game on a resignation or an agreed draw.
- */
-export type GameEndStatus = GameStatus | "resign" | "draw";
 
 interface PlayerBar {
   element: HTMLDivElement;
@@ -153,6 +167,8 @@ export default class ChessScreen implements Screen {
   gameEnded: boolean = false;
   scoreWidget: HTMLDivElement;
   scoreDisplay: HTMLDivElement;
+  /** Why the game that just finished ended, under the score. */
+  resultReason: HTMLDivElement;
   playAgainButton: HTMLButtonElement;
   blackPlayerBar: PlayerBar;
   whitePlayerBar: PlayerBar;
@@ -180,6 +196,21 @@ export default class ChessScreen implements Screen {
    * move clears them, as it does on the server.
    */
   private drawOffer: "none" | "mine" | "theirs" = "none";
+  /** Whether the resign button is waiting for a second click to confirm. */
+  private resignArmed = false;
+  /**
+   * Whether this browser has made a move yet. Until it has, the game can be
+   * called off rather than resigned, as it can on the server.
+   */
+  private hasMoved = false;
+  /** What each clock has left, as of the last message from the server. */
+  private clockRemaining: Record<Color, number> | null = null;
+  /** Whose clock the server says is running. */
+  private clockRunning: Color | null = null;
+  /** When the last clock message arrived, so the display can tick on from it. */
+  private clockSyncedAt = 0;
+  /** The timer that redraws the clocks between messages, once the screen is up. */
+  private clockTimer: number | null = null;
   /**
    * The piece types the game was set up with. A finished game credits every one
    * of them, whichever player ended up with it.
@@ -255,6 +286,10 @@ export default class ChessScreen implements Screen {
     this.scoreDisplay = document.createElement("div");
     this.scoreDisplay.classList.add("score");
     this.scoreWidget.appendChild(this.scoreDisplay);
+    this.resultReason = document.createElement("div");
+    this.resultReason.classList.add("result-reason");
+    this.resultReason.hidden = true;
+    this.scoreWidget.appendChild(this.resultReason);
     this.playAgainButton = document.createElement("button");
     this.playAgainButton.classList.add("play-again-button");
     this.playAgainButton.textContent = "Play again";
@@ -262,8 +297,14 @@ export default class ChessScreen implements Screen {
 
     this.blackPlayerBar = this.createPlayerBar(this.playerNames.black);
     this.whitePlayerBar = this.createPlayerBar(this.playerNames.white);
+    if (this.online) {
+      // Both clocks start full, and neither runs until the server says so.
+      const { initialMs } = this.online.timeControl;
+      this.clockRemaining = { white: initialMs, black: initialMs };
+    }
     this.updateMaterialAdvantage(this.game.state);
     this.updateTurnIndicator();
+    this.renderClocks();
   }
 
   activate(parent: HTMLElement): void {
@@ -295,13 +336,6 @@ export default class ChessScreen implements Screen {
     this.noticeElement.classList.add("game-notice");
     this.noticeElement.hidden = true;
     sidebar.appendChild(this.noticeElement);
-
-    if (this.options.levelLabel) {
-      const level = document.createElement("p");
-      level.classList.add("game-level");
-      level.textContent = `Playing at: ${this.options.levelLabel}`;
-      sidebar.appendChild(level);
-    }
 
     sidebar.appendChild(this.scoreWidget);
     sidebar.appendChild(this.pieceInfoBar.element);
@@ -335,12 +369,18 @@ export default class ChessScreen implements Screen {
 
       const resign = document.createElement("button");
       resign.classList.add("resign-button");
-      resign.textContent = "Resign";
-      // Resigning asks twice: one click arms the button, the next gives up.
+      // Before this browser has moved the game can be called off outright;
+      // after that, giving up is a resignation, which asks twice.
       resign.addEventListener("click", () => {
-        if (!resign.classList.contains("confirming")) {
-          resign.classList.add("confirming");
-          resign.textContent = "Confirm resign";
+        if (resign.disabled) return;
+        if (this.canAbort()) {
+          resign.disabled = true;
+          this.online?.abort();
+          return;
+        }
+        if (!this.resignArmed) {
+          this.resignArmed = true;
+          this.renderResignButton();
           return;
         }
         resign.disabled = true;
@@ -348,6 +388,7 @@ export default class ChessScreen implements Screen {
       });
       this.resignButton = resign;
       actions.appendChild(resign);
+      this.renderResignButton();
     }
 
     this.historyBar = new HistoryBar(
@@ -376,6 +417,12 @@ export default class ChessScreen implements Screen {
 
     this.aiPlayer?.preload();
     this.maybeRunAi();
+
+    if (this.online) {
+      // The server sends the clocks on every move and again while one runs;
+      // between messages the display ticks on by itself.
+      this.clockTimer = window.setInterval(() => this.renderClocks(), 100);
+    }
   }
 
   clearSelection(): void {
@@ -555,34 +602,51 @@ export default class ChessScreen implements Screen {
     this.boardView.setCheckMarker(king ? king.position : null);
   }
 
-  setGameEnd(status: GameEndStatus, color: Color): void {
+  /**
+   * Ends the game on screen. `loser` is the side that lost, or `null` when
+   * nobody did: a drawn game, or one that was called off.
+   */
+  setGameEnd(status: GameEndStatus, loser: Color | null): void {
     if (this.gameEnded) return;
     this.gameEnded = true;
     this.clearSelection();
     this.disarmResign();
     if (this.resignButton) this.resignButton.disabled = true;
     if (this.drawButton) this.drawButton.disabled = true;
-    if (status === "checkmate") {
+    this.stopClock();
+    if (status === "checkmate" && loser !== null) {
       const king = this.game.state.pieces.find(
-        (piece) => piece.type.royal && piece.color === color,
+        (piece) => piece.type.royal && piece.color === loser,
       );
       this.boardView.setCheckmatedKing(king ? king.id : null);
     }
     this.scoreWidget.classList.remove("hidden");
-    if (status === "stalemate" || status === "draw") {
+    if (status === "abort") {
+      this.scoreDisplay.textContent = "Aborted";
+    } else if (isDrawn(status)) {
       this.scoreDisplay.textContent = "½-½";
     } else {
-      this.scoreDisplay.textContent = color === "white" ? "0-1" : "1-0";
+      this.scoreDisplay.textContent = loser === "white" ? "0-1" : "1-0";
     }
-    this.recordDiscovery(status, color);
+    // The reason the game ended, which the board cannot show on its own.
+    const reason = describeResult(status, loser);
+    this.resultReason.textContent = reason ?? "";
+    this.resultReason.hidden = reason === null;
+    this.recordDiscovery(status, loser);
   }
 
   /**
-   * Shows the result the server decided. `winner` is the side that won, or
-   * `"draw"`; the rest of the screen only needs the side that lost.
+   * Shows the result the server decided. `winner` is the side that won,
+   * `"draw"` for a drawn game, or `null` for a game that was called off; the
+   * rest of the screen only needs the side that lost, which there is none of in
+   * either of those two cases.
    */
-  declareResult(status: GameEndStatus, winner: Color | "draw"): void {
-    this.setGameEnd(status, winner === "draw" ? "white" : invertColor(winner));
+  declareResult(status: GameEndStatus, winner: Color | "draw" | null): void {
+    // A drawn or called-off game has no losing side to name.
+    const loser = winner === "draw" || winner === null
+      ? null
+      : invertColor(winner);
+    this.setGameEnd(status, loser);
   }
 
   /**
@@ -597,6 +661,7 @@ export default class ChessScreen implements Screen {
     board: SerializedBoardState,
     pgn: string,
     inCheck: boolean,
+    color: Color,
   ): void {
     const state = deserializeBoardState(board);
     this.game.state = state;
@@ -613,6 +678,15 @@ export default class ChessScreen implements Screen {
     // server.
     this.disarmResign();
     this.clearDrawOffer();
+    // Once this browser has moved, giving up is a resignation rather than an
+    // abort, exactly as it is on the server. A move also puts the button back in
+    // play: an abort that raced this move was refused, and the button should
+    // have been a resign by then anyway.
+    if (color === this.online?.color && !this.hasMoved && !this.gameEnded) {
+      this.hasMoved = true;
+      if (this.resignButton) this.resignButton.disabled = false;
+      this.renderResignButton();
+    }
     this.updateCheckMarkers(state, inCheck);
     this.arrowsLayer.clear();
     this.clearSelection();
@@ -621,6 +695,19 @@ export default class ChessScreen implements Screen {
 
     this.historyBar?.addLogEntry(cloneChessBoardState(state), pgn);
     this.plyCount++;
+  }
+
+  /**
+   * Shows what each clock has left, and whose is running.
+   *
+   * The server is the authority, so its numbers replace whatever the display
+   * had; from here the running clock ticks on by itself until the next message.
+   */
+  applyClock(white: number, black: number, running: Color | null): void {
+    this.clockRemaining = { white, black };
+    this.clockRunning = running;
+    this.clockSyncedAt = Date.now();
+    this.renderClocks();
   }
 
   /**
@@ -691,12 +778,36 @@ export default class ChessScreen implements Screen {
     this.noticeElement.hidden = false;
   }
 
+  /**
+   * Whether the game can be called off rather than resigned, which it can until
+   * this browser has moved.
+   */
+  private canAbort(): boolean {
+    return this.online !== undefined && !this.hasMoved;
+  }
+
+  /**
+   * Shows what the resign button would do: call the game off before this
+   * browser has moved, resign after it, and confirm a resignation once armed.
+   */
+  private renderResignButton(): void {
+    const button = this.resignButton;
+    if (!button) return;
+    const aborting = this.canAbort();
+    button.classList.toggle("abort-button", aborting);
+    button.classList.toggle("confirming", !aborting && this.resignArmed);
+    button.textContent = aborting
+      ? "Abort"
+      : this.resignArmed
+      ? "Confirm resign"
+      : "Resign";
+  }
+
   /** Takes a resign button that is waiting for confirmation back to its start. */
   private disarmResign(): void {
-    const button = this.resignButton;
-    if (!button || !button.classList.contains("confirming")) return;
-    button.classList.remove("confirming");
-    button.textContent = "Resign";
+    if (!this.resignArmed) return;
+    this.resignArmed = false;
+    this.renderResignButton();
   }
 
   /**
@@ -704,13 +815,16 @@ export default class ChessScreen implements Screen {
    * player is the colour this browser plays: the one the server handed out in
    * an online game, and white otherwise, since white is the side a person has
    * in both of the local modes.
+   *
+   * A game that was called off decided nothing, so nothing is credited for it.
    */
-  private recordDiscovery(status: GameEndStatus, color: Color): void {
+  private recordDiscovery(status: GameEndStatus, loser: Color | null): void {
+    if (status === "abort") return;
     const playerColor: Color = this.online?.color ??
       (this.game.players.white.type === "human" ? "white" : "black");
-    const outcome: GameOutcome = status === "stalemate" || status === "draw"
+    const outcome: GameOutcome = isDrawn(status)
       ? "tie"
-      : color === playerColor
+      : loser === playerColor
       ? "loss"
       : "win";
     recordGame({
@@ -734,8 +848,35 @@ export default class ChessScreen implements Screen {
     this.disposed = true;
     document.removeEventListener("keydown", this.onKeyDown);
     document.removeEventListener("pointerdown", this.onDocumentPointerDown);
+    this.stopClock();
     this.aiPlayer?.dispose();
     this.aiPlayer = null;
+  }
+
+  /** Stops the timer that redraws the clocks, if one is running. */
+  private stopClock(): void {
+    if (this.clockTimer === null) return;
+    window.clearInterval(this.clockTimer);
+    this.clockTimer = null;
+  }
+
+  /**
+   * Draws what each clock has left, counting the running one on from the last
+   * message the server sent.
+   */
+  private renderClocks(): void {
+    const remaining = this.clockRemaining;
+    if (!remaining) return;
+    const elapsed = this.clockRunning === null
+      ? 0
+      : Date.now() - this.clockSyncedAt;
+
+    for (const color of ["white", "black"] as Color[]) {
+      const left = remaining[color] - (this.clockRunning === color ? elapsed : 0);
+      const bar = color === "white" ? this.whitePlayerBar : this.blackPlayerBar;
+      bar.clock.textContent = formatClock(left);
+      bar.clock.classList.toggle("low", left <= 20_000);
+    }
   }
 
   /** Updates the check marker and checkmate orientation to match a state. */

@@ -56,7 +56,29 @@ export type Player =
       minTurnTimeMs: number;
     };
 
-export type GameStatus = "checkmate" | "stalemate";
+export type GameStatus = "checkmate" | "stalemate" | "repetition";
+
+/**
+ * What makes two positions the same for the repetition rule: every piece's kind,
+ * side and square, whose turn it is, what may still be castled and whether a
+ * pawn can be taken en passant. The move counters are left out, so a position
+ * the game leaves and returns to always produces the same key again.
+ */
+function positionKey(state: ChessBoardState): string {
+  const squares = state.pieces.map((piece) => {
+    const symbol = state.symbols.get(piece.type) ?? piece.type.symbol;
+    const color = piece.color === "white" ? "w" : "b";
+    // Only a piece that could still be castled with makes its having moved part
+    // of the position, as it does in chess: shuffling a knight out and back is
+    // the same position, moving a king out and back is not.
+    const moved = piece.type.canCastle || piece.type === pieceTypes.rook
+      ? piece.hasMoved ? "-" : "+"
+      : "";
+    return `${symbol}${color}${piece.position.x}${piece.position.y}${moved}`;
+  }).sort();
+  const enPassant = state.lastMove?.passedTilesForEnPassant?.length ? "e" : "-";
+  return `${state.turn}${enPassant}${squares.join("")}`;
+}
 
 export class ChessGame {
   state: ChessBoardState;
@@ -66,6 +88,14 @@ export class ChessGame {
   } = Object.freeze({ white: { type: "human" }, black: { type: "human" } });
 
   lastMove: TaggedMove | undefined = undefined;
+
+  /**
+   * How often each position has arisen, keyed as {@link positionKey} reads it.
+   * The position the game is set up in counts as the first occurrence of
+   * itself, so it is recorded with the first move rather than here: a game is
+   * laid out by its pieces being placed, which the constructor cannot see.
+   */
+  private positionCounts: Map<string, number> | null = null;
 
   constructor() {
     this.state = {
@@ -110,7 +140,15 @@ export class ChessGame {
     setInCheck: (color: "black" | "white", isInCheck: boolean) => void,
     onGameEnd: (status: GameStatus, color: "black" | "white") => void,
   ): void {
+    // The position being left is the one the game was set up in the first time
+    // round, so it is recorded before the move takes it away.
+    this.positionCounts ??= new Map([[positionKey(this.state), 1]]);
+
     applyMove(this.state, move, movePiece, destroyPiece, addPiece);
+
+    const key = positionKey(this.state);
+    const occurrences = (this.positionCounts.get(key) ?? 0) + 1;
+    this.positionCounts.set(key, occurrences);
 
     const color = this.state.turn;
     const inCheck = isInCheck(color, this.state);
@@ -118,6 +156,10 @@ export class ChessGame {
 
     if (!this.hasLegalMoves(color)) {
       onGameEnd(inCheck ? "checkmate" : "stalemate", color);
+    } else if (occurrences >= 3) {
+      // Seen three times over, the game is level; the side to move is not at
+      // fault for it, but it is the side the position was reached with.
+      onGameEnd("repetition", color);
     }
   }
 

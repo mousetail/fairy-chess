@@ -2,6 +2,7 @@ import {
   PROTOCOL_VERSION,
   type ServerMessage,
 } from "../src/online/protocol.ts";
+import { timeControlLabel, timeControls } from "../src/online/time-controls.ts";
 import { chaosLevels } from "../src/replacement-rules.ts";
 import { type Client, Lobby } from "./lobby.ts";
 import { maxComplexity, minComplexity } from "./matchmaking.ts";
@@ -14,6 +15,15 @@ const openReadyState = 1;
 const defaultPort = 8000;
 const defaultHeartbeatMs = 30_000;
 const defaultMaxMessageBytes = 8192;
+
+/**
+ * How often the games' clocks are checked.
+ *
+ * The flag itself is decided from the wall clock, so this only sets how finely
+ * a clock that has run out is noticed, and how often the players are reminded
+ * what their clocks say.
+ */
+const clockTickMs = 250;
 
 export interface ServerOptions {
   port?: number;
@@ -178,6 +188,12 @@ export function startServer(options: ServerOptions = {}): RunningServer {
     Deno.unrefTimer(timer as unknown as number);
   }
 
+  // The clock is the one thing the lobby cannot work out for itself: which
+  // games have run out of time is a fact about the wall clock, so it is told
+  // the time on a timer rather than on every message.
+  const clockTimer = setInterval(() => lobby.tick(), clockTickMs);
+  Deno.unrefTimer(clockTimer as unknown as number);
+
   if (allowedOrigins.length === 0) {
     console.warn(
       "ALLOWED_ORIGINS is empty: any origin may open a socket. " +
@@ -195,6 +211,7 @@ function welcomeMessage(): ServerMessage {
     minComplexity,
     maxComplexity,
     complexityLabels: chaosLevels.map((level) => level.label),
+    timeControlLabels: timeControls.map(timeControlLabel),
   };
 }
 

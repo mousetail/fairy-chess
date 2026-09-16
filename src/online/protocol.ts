@@ -5,24 +5,53 @@ import type { SerializedBoardState, SerializedMove } from "./serialization.ts";
  * The messages exchanged with the matchmaking server.
  *
  * The server owns the game: it picks the settings, builds the starting
- * position, and only relays a move once it has checked it against the board it
- * holds. Clients are expected to generate their own candidate moves (they share
- * the same rules code) so the board stays responsive, but a move they send is
- * only a request until the server accepts it.
+ * position, runs the clocks, and only relays a move once it has checked it
+ * against the board it holds. Clients are expected to generate their own
+ * candidate moves (they share the same rules code) so the board stays
+ * responsive, but a move they send is only a request until the server accepts
+ * it.
  */
 
-/** The wire protocol version. Bumped whenever a message shape changes. */
-export const PROTOCOL_VERSION = 1;
+/**
+ * The wire protocol version. Bumped whenever a message shape changes, or a
+ * message gains a value that an older client would read wrongly.
+ */
+export const PROTOCOL_VERSION = 3;
 
 export type Color = "white" | "black";
 
-export type GameOverStatus = "checkmate" | "stalemate" | "resign" | "draw";
+export type GameOverStatus =
+  | "checkmate"
+  | "stalemate"
+  /** The same position three times over, which is played out as a draw. */
+  | "repetition"
+  | "resign"
+  | "draw"
+  /** A player's clock ran out. */
+  | "timeout"
+  /** The game was called off before either player had made a move. */
+  | "abort";
 
 export type GameResult = {
   status: GameOverStatus;
-  /** The side that won, or `"draw"` for a stalemate. */
-  winner: Color | "draw";
+  /**
+   * The side that won, `"draw"` for a drawn game, or `null` when there is no
+   * result at all — an aborted game.
+   */
+  winner: Color | "draw" | null;
 };
+
+/** The clocks a game is played with, as the server decided them. */
+export interface TimeControlSpec {
+  /** The index into `timeControls` in `./time-controls.ts`. */
+  index: number;
+  /** The label the time control is known by, e.g. `"3+2"`. */
+  label: string;
+  /** The milliseconds each player starts with. */
+  initialMs: number;
+  /** The milliseconds added to a player's clock after each of their moves. */
+  incrementMs: number;
+}
 
 /** Why the server refused a move. */
 export type MoveRejection =
@@ -51,14 +80,21 @@ export interface MoveRequest {
 
 export type ClientMessage =
   /**
-   * Ask to be matched. `complexity` is an index into the chaos levels; the
-   * server may pair the player with anyone within one level of it.
+   * Ask to be matched. `complexity` is an index into the chaos levels and
+   * `timeControl` an index into the time controls; the server may pair the
+   * player with anyone within one chaos level who wants the same clock.
    */
-  | { type: "join"; complexity: number; name?: string }
+  | { type: "join"; complexity: number; timeControl: number; name?: string }
   /** Leave the queue without waiting for an opponent. */
   | { type: "cancelQueue" }
   | ({ type: "move" } & MoveRequest)
+  /** End the game in the opponent's favour. */
   | { type: "resign" }
+  /**
+   * Call the game off, which is only allowed before this player has moved. The
+   * game ends with no result rather than in a loss.
+   */
+  | { type: "abort" }
   /**
    * Offer a draw. The offer stands until the opponent offers one too, which
    * ends the game drawn; there is no way to take it back.
@@ -75,8 +111,9 @@ export type ServerMessage =
       minComplexity: number;
       maxComplexity: number;
       complexityLabels: string[];
+      timeControlLabels: string[];
     }
-  | { type: "queued"; complexity: number; waiting: number }
+  | { type: "queued"; complexity: number; timeControl: number; waiting: number }
   | { type: "queueCancelled" }
   | {
       type: "matched";
@@ -87,6 +124,8 @@ export type ServerMessage =
       /** The chaos level the server picked for this game. */
       complexity: number;
       complexityLabel: string;
+      /** The clocks the server picked for this game. */
+      timeControl: TimeControlSpec;
       /** The starting position, as laid out by the server. */
       board: SerializedBoardState;
     }
@@ -101,6 +140,12 @@ export type ServerMessage =
       /** Whether the side that must move next is in check. */
       inCheck: boolean;
     }
+  /**
+   * What each player's clock has left, and whose is running. Sent after every
+   * move and again while a clock runs, so a client that ticked on its own
+   * catches up with the server.
+   */
+  | { type: "clock"; white: number; black: number; running: Color | null }
   | { type: "moveRejected"; rejection: MoveRejection }
   /**
    * Someone offered a draw. Sent to both players, naming the side that offered,
@@ -120,6 +165,7 @@ const serverMessageTypes = new Set<string>([
   "queueCancelled",
   "matched",
   "moved",
+  "clock",
   "moveRejected",
   "drawOffered",
   "gameOver",

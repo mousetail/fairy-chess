@@ -78,11 +78,12 @@ export class App {
     const screen = new ChessScreen({
       initialBoard: game.board,
       playerNames,
-      levelLabel: game.complexityLabel,
       online: {
         color: game.color,
+        timeControl: game.timeControl,
         requestMove: (request) => game.requestMove(request),
         resign: () => game.resign(),
+        abort: () => game.abort(),
         offerDraw: () => game.offerDraw(),
       },
       onPlayAgain: () => {
@@ -94,8 +95,10 @@ export class App {
     });
 
     game.listen({
-      moved: (board, pgn, inCheck) =>
-        screen.applyServerMove(board, pgn, inCheck),
+      moved: (board, pgn, inCheck, color) =>
+        screen.applyServerMove(board, pgn, inCheck, color),
+      clock: (white, black, running) =>
+        screen.applyClock(white, black, running),
       moveRejected: (rejection) => screen.reportRejection(rejection),
       notice: (text) => screen.showNotice(text),
       gameOver: (status, winner) => screen.declareResult(status, winner),

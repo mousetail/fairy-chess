@@ -9,6 +9,11 @@ import {
   type MatchmakingSession,
   type MatchmakingStatus,
 } from "./online/session.ts";
+import {
+  clampTimeControl,
+  timeControlLabel,
+  timeControls,
+} from "./online/time-controls.ts";
 import { chaosLevels } from "./replacement-rules.ts";
 import type { Screen } from "./screen.ts";
 import type { HomeScreenSettings } from "./settings.ts";
@@ -156,6 +161,26 @@ export class HomeScreen implements Screen {
       "matched at, give or take one level.";
     onlineOptions.appendChild(onlineHint);
 
+    const timeControlOptions = timeControls.map(timeControlLabel);
+    const timeControlSlider = this.createSlider(
+      "Time control",
+      timeControlOptions,
+      this.sliderIndex(
+        this.options.settings.timeControl,
+        timeControlOptions.length,
+        1,
+      ),
+    );
+    timeControlSlider.element.classList.add("time-control");
+    onlineOptions.appendChild(timeControlSlider.element);
+
+    const timeControlHint = document.createElement("p");
+    timeControlHint.classList.add("option-hint");
+    timeControlHint.textContent =
+      "Minutes each, plus seconds added to your clock after every move. Your " +
+      "first move is free, so nothing runs down before you have played.";
+    onlineOptions.appendChild(timeControlHint);
+
     container.appendChild(onlineOptions);
 
     const updateOptionVisibility = () => {
@@ -214,6 +239,7 @@ export class HomeScreen implements Screen {
       minTurnTime: minTurnTimeInput.value,
       difficulty: difficultySlider.getValue(),
       chaosLevel: chaosLevelSlider.getValue(),
+      timeControl: timeControlSlider.getValue(),
       playerName: nameInput.value,
     });
     const report = () => this.options.onSettingsChange(currentSettings());
@@ -228,6 +254,7 @@ export class HomeScreen implements Screen {
       statusText.textContent = describeStatus(
         status,
         this.matchmaking.complexityLabel,
+        this.matchmaking.timeControlLabel,
       );
       cancelButton.hidden = !searching;
     });
@@ -245,6 +272,7 @@ export class HomeScreen implements Screen {
         // The search runs alongside this screen, so there is nothing to leave.
         this.matchmaking.queue(
           this.chaosLevelIndex(settings.chaosLevel),
+          clampTimeControl(Number.parseInt(settings.timeControl, 10)),
           settings.playerName,
         );
         return;
@@ -390,17 +418,21 @@ export class HomeScreen implements Screen {
 }
 
 /** The line shown while a search is running, or after one has failed. */
-function describeStatus(status: MatchmakingStatus, level: string): string {
+function describeStatus(
+  status: MatchmakingStatus,
+  level: string,
+  timeControl: string,
+): string {
+  const looking = `Looking for an opponent at ${level} (${timeControl})\u2026`;
   switch (status.state) {
     case "idle":
       return "";
     case "connecting":
-      return `Looking for an opponent at ${level}\u2026`;
+      return looking;
     case "queued":
       return status.waiting <= 1
-        ? `Looking for an opponent at ${level}\u2026`
-        : `Looking for an opponent at ${level}\u2026 ` +
-          `(${status.waiting} players waiting)`;
+        ? looking
+        : `${looking} (${status.waiting} players waiting)`;
     case "error":
       return status.message;
   }

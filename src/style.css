@@ -350,6 +350,17 @@ body {
   font-size: 1.2rem;
 }
 
+/* Why the game ended, which the score itself cannot say. */
+.result-reason {
+  padding: 0 0.5rem 0.5rem;
+  text-align: center;
+  font-size: 0.8rem;
+
+  &[hidden] {
+    display: none;
+  }
+}
+
 .play-again-button {
   border: none;
   border-top: 2px solid black;
@@ -577,6 +588,11 @@ button.play-button {
     background-color: var(--highlighted-square-color);
     color: black;
   }
+
+  /* A clock in its last seconds reads louder than one with time to spare. */
+  &.low {
+    color: #8b1a1a;
+  }
 }
 
 .game-actions {
@@ -610,7 +626,12 @@ button.play-button {
   background-color: #f4b6b6;
 }
 
-.game-level,
+/* Before a player has moved the button calls the game off instead, which is not
+   a loss and so does not read as one. */
+.resign-button.abort-button {
+  background-color: #f4e6b6;
+}
+
 .game-notice {
   padding: 0.4rem;
   border: 2px solid black;

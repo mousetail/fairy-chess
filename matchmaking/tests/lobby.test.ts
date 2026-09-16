@@ -32,8 +32,8 @@ class FakeClient implements Client {
 }
 
 /** A lobby that always gives white to the player who joined first. */
-function deterministicLobby(): Lobby {
-  return new Lobby({ random: () => 0 });
+function deterministicLobby(now: () => number = () => 0): Lobby {
+  return new Lobby({ random: () => 0, now });
 }
 
 function join(
@@ -41,8 +41,9 @@ function join(
   client: Client,
   complexity: number,
   name?: string,
+  timeControl = 0,
 ): void {
-  lobby.handleMessage(client, { type: "join", complexity, name });
+  lobby.handleMessage(client, { type: "join", complexity, timeControl, name });
 }
 
 /** Joins `first` and `second` with matching preferences and returns the match. */
@@ -83,6 +84,37 @@ Deno.test("players within one level are paired into a game", () => {
   assert.equal(firstMatch.board.pieces.length, 32);
   assert.equal(lobby.waitingCount, 0);
   assert.equal(lobby.gameCount, 1);
+});
+
+Deno.test("a game is played with the clock both players asked for", () => {
+  const lobby = deterministicLobby();
+  const first = new FakeClient("first");
+  const second = new FakeClient("second");
+
+  join(lobby, first, 0, "Ada", 2);
+  join(lobby, second, 0, "Bob", 2);
+
+  assert.deepEqual(first.last("matched")?.timeControl, {
+    index: 2,
+    label: "5+5",
+    initialMs: 300_000,
+    incrementMs: 5_000,
+  });
+});
+
+Deno.test("players who want different clocks are not paired", () => {
+  const lobby = deterministicLobby();
+  const quick = new FakeClient("quick");
+  const slow = new FakeClient("slow");
+
+  join(lobby, quick, 0, undefined, 0);
+  join(lobby, slow, 0, undefined, 3);
+
+  assert.equal(quick.last("matched"), undefined);
+  assert.equal(slow.last("matched"), undefined);
+  assert.equal(quick.last("queued")?.timeControl, 0);
+  assert.equal(slow.last("queued")?.timeControl, 3);
+  assert.equal(lobby.waitingCount, 2);
 });
 
 Deno.test("players too far apart wait for someone closer", () => {
@@ -412,4 +444,210 @@ Deno.test("a player-supplied name is sanitised", () => {
   assert.equal(sanitizeName(42), "Anonymous");
   assert.equal(sanitizeName("bad\u0000\nname"), "badname");
   assert.equal(sanitizeName("a".repeat(40)).length, 24);
+});
+
+Deno.test("a player's clock only runs once both sides have moved", () => {
+  let now = 0;
+  const lobby = deterministicLobby(() => now);
+  const { white, black } = matched(
+    lobby,
+    new FakeClient("first"),
+    new FakeClient("second"),
+  );
+
+  // White's first move is free, and black's clock does not run either.
+  lobby.handleMessage(white, {
+    type: "move",
+    pieceId: 4,
+    from: { x: 4, y: 1 },
+    to: { x: 4, y: 3 },
+  });
+  assert.deepEqual(white.last("clock"), {
+    type: "clock",
+    white: 62_000,
+    black: 60_000,
+    running: null,
+  });
+
+  now = 5_000;
+  lobby.handleMessage(black, {
+    type: "move",
+    pieceId: 12,
+    from: { x: 4, y: 6 },
+    to: { x: 4, y: 4 },
+  });
+  // Black's first move is free too, and now white is on the clock.
+  assert.deepEqual(white.last("clock"), {
+    type: "clock",
+    white: 62_000,
+    black: 62_000,
+    running: "white",
+  });
+
+  now = 15_000;
+  lobby.handleMessage(white, {
+    type: "move",
+    pieceId: 17,
+    from: { x: 1, y: 0 },
+    to: { x: 2, y: 2 },
+  });
+  // White used ten seconds and gained two, so 62 - 10 + 2 = 54.
+  assert.deepEqual(white.last("clock"), {
+    type: "clock",
+    white: 54_000,
+    black: 62_000,
+    running: "black",
+  });
+});
+
+Deno.test("a player who runs out of time loses", () => {
+  let now = 0;
+  const lobby = deterministicLobby(() => now);
+  const { white, black } = matched(
+    lobby,
+    new FakeClient("first"),
+    new FakeClient("second"),
+  );
+
+  // Both sides move, so white's clock starts running with 62 seconds on it.
+  lobby.handleMessage(white, {
+    type: "move",
+    pieceId: 4,
+    from: { x: 4, y: 1 },
+    to: { x: 4, y: 3 },
+  });
+  lobby.handleMessage(black, {
+    type: "move",
+    pieceId: 12,
+    from: { x: 4, y: 6 },
+    to: { x: 4, y: 4 },
+  });
+
+  // A second past the flag, which is the grace the server allows for lag.
+  now = 63_001;
+  lobby.tick();
+
+  const lost = { type: "gameOver", status: "timeout", winner: "black" };
+  assert.deepEqual(white.last("gameOver"), lost);
+  assert.deepEqual(black.last("gameOver"), lost);
+  assert.equal(lobby.gameCount, 0);
+});
+
+Deno.test("a move that arrives within the grace is still played", () => {
+  let now = 0;
+  const lobby = deterministicLobby(() => now);
+  const { white, black } = matched(
+    lobby,
+    new FakeClient("first"),
+    new FakeClient("second"),
+  );
+
+  lobby.handleMessage(white, {
+    type: "move",
+    pieceId: 4,
+    from: { x: 4, y: 1 },
+    to: { x: 4, y: 3 },
+  });
+  lobby.handleMessage(black, {
+    type: "move",
+    pieceId: 12,
+    from: { x: 4, y: 6 },
+    to: { x: 4, y: 4 },
+  });
+
+  // Half a second past the flag, which the grace covers.
+  now = 62_500;
+  lobby.handleMessage(white, {
+    type: "move",
+    pieceId: 17,
+    from: { x: 1, y: 0 },
+    to: { x: 2, y: 2 },
+  });
+
+  assert.equal(white.last("moved")?.pgn, "Nc3");
+  assert.equal(white.last("gameOver"), undefined);
+  // The move was late, so the clock was settled below zero and the increment
+  // brought it back up.
+  assert.equal(white.last("clock")?.white, 1_500);
+});
+
+Deno.test("the clocks are sent again while one runs", () => {
+  let now = 0;
+  const lobby = deterministicLobby(() => now);
+  const { white, black } = matched(
+    lobby,
+    new FakeClient("first"),
+    new FakeClient("second"),
+  );
+
+  lobby.handleMessage(white, {
+    type: "move",
+    pieceId: 4,
+    from: { x: 4, y: 1 },
+    to: { x: 4, y: 3 },
+  });
+  lobby.handleMessage(black, {
+    type: "move",
+    pieceId: 12,
+    from: { x: 4, y: 6 },
+    to: { x: 4, y: 4 },
+  });
+  const sent = white.messages("clock").length;
+
+  now = 500;
+  lobby.tick();
+  assert.equal(white.messages("clock").length, sent, "too soon to send again");
+
+  now = 1_000;
+  lobby.tick();
+  assert.equal(white.messages("clock").length, sent + 1);
+  assert.equal(white.last("clock")?.running, "white");
+});
+
+Deno.test("a game can be called off before the player has moved", () => {
+  const lobby = deterministicLobby();
+  const { white, black } = matched(
+    lobby,
+    new FakeClient("first"),
+    new FakeClient("second"),
+  );
+
+  lobby.handleMessage(white, { type: "abort" });
+
+  const aborted = { type: "gameOver", status: "abort", winner: null };
+  assert.deepEqual(white.last("gameOver"), aborted);
+  assert.deepEqual(black.last("gameOver"), aborted);
+  assert.equal(lobby.gameCount, 0);
+});
+
+Deno.test("a player who has moved cannot call the game off", () => {
+  const lobby = deterministicLobby();
+  const { white, black } = matched(
+    lobby,
+    new FakeClient("first"),
+    new FakeClient("second"),
+  );
+
+  lobby.handleMessage(white, {
+    type: "move",
+    pieceId: 4,
+    from: { x: 4, y: 1 },
+    to: { x: 4, y: 3 },
+  });
+  lobby.handleMessage(white, { type: "abort" });
+
+  assert.match(white.last("error")?.message ?? "", /already moved/);
+  assert.equal(lobby.gameCount, 1);
+  // Black has not moved, so black may still call it off.
+  lobby.handleMessage(black, { type: "abort" });
+  assert.equal(black.last("gameOver")?.status, "abort");
+});
+
+Deno.test("calling a game off without one is reported", () => {
+  const lobby = deterministicLobby();
+  const client = new FakeClient("client");
+
+  lobby.handleMessage(client, { type: "abort" });
+
+  assert.match(client.last("error")?.message ?? "", /not in a game/);
 });

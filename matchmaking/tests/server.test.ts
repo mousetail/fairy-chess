@@ -105,11 +105,12 @@ Deno.test("two clients are matched and play a game over a websocket", async () =
     const welcome = await first.next("welcome");
     assert.equal(welcome.protocolVersion, PROTOCOL_VERSION);
     assert.equal(welcome.complexityLabels.length, welcome.maxComplexity + 1);
+    assert.deepEqual(welcome.timeControlLabels, ["1+2", "3+2", "5+5", "10+10"]);
 
     // The two players ask for neighbouring levels, so they may be paired; the
     // game is then played at the less chaotic of the two.
-    first.send({ type: "join", complexity: 0, name: "Ada" });
-    second.send({ type: "join", complexity: 1, name: "Bob" });
+    first.send({ type: "join", complexity: 0, timeControl: 1, name: "Ada" });
+    second.send({ type: "join", complexity: 1, timeControl: 1, name: "Bob" });
 
     const [firstMatch, secondMatch] = await Promise.all([
       first.next("matched"),
@@ -119,13 +120,15 @@ Deno.test("two clients are matched and play a game over a websocket", async () =
     assert.notEqual(firstMatch.color, secondMatch.color);
     assert.equal(firstMatch.complexity, 0);
     assert.equal(firstMatch.complexityLabel, "normal chess");
+    assert.equal(firstMatch.timeControl.label, "3+2");
+    assert.equal(firstMatch.timeControl.initialMs, 180_000);
     assert.equal(firstMatch.opponentName, "Bob");
     assert.equal(secondMatch.opponentName, "Ada");
     assert.equal(firstMatch.board.pieces.length, 32);
     assert.equal(firstMatch.board.turn, "white");
 
     // A third player who asks for full chaos has nobody to play, so it waits.
-    spectator.send({ type: "join", complexity: 4 });
+    spectator.send({ type: "join", complexity: 4, timeControl: 1 });
     assert.equal((await spectator.next("queued")).waiting, 1);
 
     const white = firstMatch.color === "white" ? first : second;
@@ -177,8 +180,8 @@ Deno.test("a game is drawn once both players have offered one", async () => {
     await Promise.all([first.ready, second.ready]);
     await Promise.all([first.next("welcome"), second.next("welcome")]);
 
-    first.send({ type: "join", complexity: 0, name: "Ada" });
-    second.send({ type: "join", complexity: 0, name: "Bob" });
+    first.send({ type: "join", complexity: 0, timeControl: 0, name: "Ada" });
+    second.send({ type: "join", complexity: 0, timeControl: 0, name: "Bob" });
     const [firstMatch] = await Promise.all([
       first.next("matched"),
       second.next("matched"),
@@ -220,10 +223,79 @@ Deno.test("a client that is not playing is told so, and survives nonsense", asyn
     client.socket.send("hello?");
     assert.match((await client.next("error")).message, /must be JSON/);
 
-    client.send({ type: "join", complexity: 2, name: "Ada" });
+    client.send({ type: "join", complexity: 2, timeControl: 0, name: "Ada" });
     assert.equal((await client.next("queued")).complexity, 2);
   } finally {
     client.close();
+    await running.server.shutdown();
+  }
+});
+
+Deno.test("the clocks are sent after every move", async () => {
+  const { running, origin } = startLocalServer();
+  const clients: TestClient[] = [];
+
+  try {
+    const first = new TestClient(`ws://${origin}/ws`);
+    const second = new TestClient(`ws://${origin}/ws`);
+    clients.push(first, second);
+    await Promise.all([first.ready, second.ready]);
+    await Promise.all([first.next("welcome"), second.next("welcome")]);
+
+    first.send({ type: "join", complexity: 0, timeControl: 0, name: "Ada" });
+    second.send({ type: "join", complexity: 0, timeControl: 0, name: "Bob" });
+    const [firstMatch] = await Promise.all([
+      first.next("matched"),
+      second.next("matched"),
+    ]);
+    const white = firstMatch.color === "white" ? first : second;
+
+    white.send({
+      type: "move",
+      pieceId: 4,
+      from: { x: 4, y: 1 },
+      to: { x: 4, y: 3 },
+    });
+    await white.next("moved");
+
+    // White's first move is free, and black has not moved yet either, so no
+    // clock is running; white's increment has already been added.
+    const clock = await white.next("clock");
+    assert.equal(clock.running, null);
+    assert.equal(clock.white, 62_000);
+    assert.equal(clock.black, 60_000);
+  } finally {
+    for (const client of clients) client.close();
+    await running.server.shutdown();
+  }
+});
+
+Deno.test("a game can be called off before either player has moved", async () => {
+  const { running, origin } = startLocalServer();
+  const clients: TestClient[] = [];
+
+  try {
+    const first = new TestClient(`ws://${origin}/ws`);
+    const second = new TestClient(`ws://${origin}/ws`);
+    clients.push(first, second);
+    await Promise.all([first.ready, second.ready]);
+    await Promise.all([first.next("welcome"), second.next("welcome")]);
+
+    first.send({ type: "join", complexity: 0, timeControl: 0, name: "Ada" });
+    second.send({ type: "join", complexity: 0, timeControl: 0, name: "Bob" });
+    await Promise.all([first.next("matched"), second.next("matched")]);
+
+    first.send({ type: "abort" });
+    const aborted = await first.next("gameOver");
+    assert.equal(aborted.status, "abort");
+    assert.equal(aborted.winner, null);
+    assert.equal((await second.next("gameOver")).status, "abort");
+
+    // The game is over, so there is nothing left to call off.
+    first.send({ type: "abort" });
+    assert.match((await first.next("error")).message, /not in a game/);
+  } finally {
+    for (const client of clients) client.close();
     await running.server.shutdown();
   }
 });

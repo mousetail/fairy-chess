@@ -30,6 +30,9 @@ export function parseClientMessage(raw: string): ParseResult {
       if (typeof record.complexity !== "number") {
         return invalid("A join needs a numeric complexity.");
       }
+      if (typeof record.timeControl !== "number") {
+        return invalid("A join needs a numeric time control.");
+      }
       if (record.name !== undefined && typeof record.name !== "string") {
         return invalid("A name must be a string.");
       }
@@ -38,6 +41,7 @@ export function parseClientMessage(raw: string): ParseResult {
         message: {
           type: "join",
           complexity: record.complexity,
+          timeControl: record.timeControl,
           name: record.name,
         },
       };
@@ -71,6 +75,8 @@ export function parseClientMessage(raw: string): ParseResult {
     }
     case "resign":
       return { ok: true, message: { type: "resign" } };
+    case "abort":
+      return { ok: true, message: { type: "abort" } };
     case "offerDraw":
       return { ok: true, message: { type: "offerDraw" } };
     case "pong":

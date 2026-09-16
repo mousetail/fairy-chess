@@ -7,7 +7,19 @@ import { chaosLevels } from "../src/replacement-rules.ts";
  * pieces the setup uses. A player is willing to play anyone within one level of
  * the level they asked for, and the game itself is then played at a level both
  * sides accept.
+ *
+ * The time control is not negotiable the same way: a clock is either the one a
+ * player asked for or it is not, so two players are only paired when they want
+ * the same one.
  */
+
+/** What a waiting player is looking for. */
+export interface Preference {
+  /** The chaos level the player asked for. */
+  complexity: number;
+  /** The index of the time control the player asked for. */
+  timeControl: number;
+}
 
 /** The least chaotic level a player may ask for. */
 export const minComplexity = 0;
@@ -22,8 +34,9 @@ export function clampComplexity(value: number): number {
 }
 
 /** Whether two players' preferences are close enough to be paired. */
-export function canMatch(a: number, b: number): boolean {
-  return Math.abs(a - b) <= 1;
+export function canMatch(a: Preference, b: Preference): boolean {
+  return a.timeControl === b.timeControl &&
+    Math.abs(a.complexity - b.complexity) <= 1;
 }
 
 /**
