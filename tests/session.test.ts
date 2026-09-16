@@ -57,6 +57,7 @@ function recorder(): {
       gameOver: (status, winner) => events.push(`over:${status}:${winner}`),
       opponentLeft: (winner) => events.push(`left:${winner}`),
       drawOffered: (color) => events.push(`draw:${color}`),
+      drawCancelled: (color) => events.push(`drawCancelled:${color}`),
       notice: (text) => events.push(`notice:${text}`),
       disconnected: () => events.push("disconnected"),
     },
@@ -193,11 +194,13 @@ test("what the player asks for goes to the server as a message", () => {
     to: { x: 4, y: 3 },
   });
   game.offerDraw();
+  game.cancelDraw();
   game.resign();
   game.abort();
   assert.deepEqual(socket().sent.slice(1), [
     '{"type":"move","pieceId":4,"from":{"x":4,"y":1},"to":{"x":4,"y":3}}',
     '{"type":"offerDraw"}',
+    '{"type":"cancelDraw"}',
     '{"type":"resign"}',
     '{"type":"abort"}',
   ]);
@@ -232,6 +235,7 @@ test("the game hears about everything that happens in it", () => {
     rejection: { reason: "not-your-turn" },
   });
   socket().receive({ type: "drawOffered", color: "black" });
+  socket().receive({ type: "drawCancelled", color: "black" });
   socket().receive({ type: "error", message: "Something went wrong." });
   socket().receive({ type: "gameOver", status: "draw", winner: "draw" });
 
@@ -240,6 +244,7 @@ test("the game hears about everything that happens in it", () => {
     "clock:182000:180000:null",
     "rejected:not-your-turn",
     "draw:black",
+    "drawCancelled:black",
     "notice:Something went wrong.",
     "over:draw:draw",
   ]);

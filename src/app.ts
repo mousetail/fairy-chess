@@ -85,6 +85,7 @@ export class App {
         resign: () => game.resign(),
         abort: () => game.abort(),
         offerDraw: () => game.offerDraw(),
+        cancelDraw: () => game.cancelDraw(),
       },
       onPlayAgain: () => {
         // Back to the home screen, where another search can be started from the
@@ -107,6 +108,7 @@ export class App {
         screen.showNotice("Your opponent left the game.");
       },
       drawOffered: (color) => screen.reportDrawOffer(color),
+      drawCancelled: (color) => screen.reportDrawCancelled(color),
       disconnected: () => {
         if (screen.gameEnded) return;
         // Whoever stayed would have been awarded the win, so the game is over

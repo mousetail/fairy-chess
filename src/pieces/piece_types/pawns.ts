@@ -59,7 +59,7 @@ const pawnPieces = {
     mobilityRegion: { white: "a* b* c* d*", black: "e* f* g* h*" },
     image: getPieceImageAsync("medieval", "guardian"),
     value: 1,
-    displayName: "Jumping Pawn",
+    displayName: "Centrist",
     description:
       "Moves and captures forward or diagonally towards the centre;",
     diagram: {
@@ -75,7 +75,7 @@ const pawnPieces = {
     mobilityRegion: { white: "e* f* g* h*", black: "a* b* c* d*" },
     image: getPieceImageAsync("medieval", "guardian"),
     value: 1,
-    displayName: "Jumping Pawn",
+    displayName: "Centrist",
     description:
       "Moves forward or diagonally towards the centre;",
     diagram: {
@@ -99,7 +99,7 @@ const pawnPieces = {
   },
   sentry: {
     symbol: "s",
-    betza: "mfWcsWbcR",
+    betza: "mfWcsW",
     promotionAbility: "deny",
     promotesLikePawn: true,
     image: getPieceImageAsync("medieval", "sentry"),
@@ -108,7 +108,7 @@ const pawnPieces = {
     description: "Moves one square forward; captures one square sideways or backwards.",
     diagram: {
       size: 5,
-      rows: [".....", "..x..", ".coc.", "..c..", "..c.."],
+      rows: [".....", "..x..", ".coc.", ".....", "....."],
     },
   },
   wall: {

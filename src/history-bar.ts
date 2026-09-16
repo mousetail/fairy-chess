@@ -46,7 +46,7 @@ export class HistoryBar {
     const img1 = document.createElement("img");
     img1.src = toStartIcon;
     backToStartButton.appendChild(img1);
-    backToStartButton.classList.add("back-to-start-button");
+    backToStartButton.classList.add("button", "back-to-start-button");
     backToStartButton.addEventListener("click", () => {
       this.historyBackToStart();
     });
@@ -56,7 +56,7 @@ export class HistoryBar {
     const img2 = document.createElement("img");
     img2.src = backIcon;
     backButton.appendChild(img2);
-    backButton.classList.add("back-button");
+    backButton.classList.add("button", "back-button");
     backButton.addEventListener("click", () => {
       this.historyBack();
     });
@@ -66,7 +66,7 @@ export class HistoryBar {
     const img3 = document.createElement("img");
     img3.src = forwardIcon;
     forwardButton.appendChild(img3);
-    forwardButton.classList.add("forward-button");
+    forwardButton.classList.add("button", "forward-button");
     forwardButton.addEventListener("click", () => {
       this.historyForward();
     });
@@ -76,7 +76,7 @@ export class HistoryBar {
     const img4 = document.createElement("img");
     img4.src = toEndIcon;
     forwardToEndButton.appendChild(img4);
-    forwardToEndButton.classList.add("forward-to-end-button");
+    forwardToEndButton.classList.add("button", "forward-to-end-button");
     forwardToEndButton.addEventListener("click", () => {
       this.historyForwardToEnd();
     });

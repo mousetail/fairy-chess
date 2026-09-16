@@ -67,19 +67,20 @@ export class HomeScreen implements Screen {
     container.appendChild(header);
 
     const description = document.createElement("p");
+    description.classList.add("text-max-width");
     description.textContent = `Chess, but pieces are randomized with different variants. Includes ${Object.keys(pieceTypes).length + 6}
       piece types including ${Object.keys(kingPieces).length + 1} king variants and ${Object.keys(pawnPieces).length + 1} pawn variants.`;
     container.appendChild(description);
 
     const discoverySummary = document.createElement("p");
-    discoverySummary.classList.add("discovery-summary");
+    discoverySummary.classList.add("text-max-width");
     discoverySummary.textContent = discoverySummaryText(
       summarize(loadDiscoveries()),
     );
     container.appendChild(discoverySummary);
 
     const discoveriesButton = document.createElement("button");
-    discoveriesButton.classList.add("discoveries-button");
+    discoveriesButton.classList.add("button", "discoveries-button");
     discoveriesButton.textContent = "Discovered pieces";
     container.appendChild(discoveriesButton);
 
@@ -200,7 +201,7 @@ export class HomeScreen implements Screen {
 
     const playButton = document.createElement("button");
     playButton.textContent = "Play";
-    playButton.classList.add("play-button");
+    playButton.classList.add("button", "play-button");
     container.appendChild(playButton);
 
     // The search takes the Play button over rather than a page of its own: the

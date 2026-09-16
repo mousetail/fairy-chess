@@ -141,6 +141,11 @@ export class MatchmakingClient {
     this.send({ type: "offerDraw" });
   }
 
+  /** Takes back a draw offer this player made, leaving the game running. */
+  cancelDraw(): void {
+    this.send({ type: "cancelDraw" });
+  }
+
   /**
    * Closes the socket because the screen is going away, without reporting the
    * close as something that went wrong.

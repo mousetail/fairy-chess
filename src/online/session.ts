@@ -62,6 +62,8 @@ export interface GameListener {
   opponentLeft(winner: Color): void;
   /** Someone offered a draw, naming the side that offered. */
   drawOffered(color: Color): void;
+  /** Someone took their draw offer back, naming the side that did. */
+  drawCancelled(color: Color): void;
   /** Something the server said that the board should show as a message. */
   notice(text: string): void;
   /** The connection dropped, so the game can go no further. */
@@ -100,6 +102,8 @@ export interface OnlineGame {
   abort(): void;
   /** Offers a draw, which the game is drawn on once the opponent offers too. */
   offerDraw(): void;
+  /** Takes back this browser's draw offer, leaving the game running. */
+  cancelDraw(): void;
 }
 
 /** How a game sends what the player asks for. */
@@ -108,6 +112,7 @@ interface GameSender {
   resign(): void;
   abort(): void;
   offerDraw(): void;
+  cancelDraw(): void;
 }
 
 export interface MatchmakingSessionOptions {
@@ -313,6 +318,7 @@ export class MatchmakingSession {
       case "clock":
       case "moveRejected":
       case "drawOffered":
+      case "drawCancelled":
         this.game?.receive(message);
         return;
     }
@@ -367,6 +373,7 @@ export class MatchmakingSession {
         resign: () => this.client?.resign(),
         abort: () => this.client?.abort(),
         offerDraw: () => this.client?.offerDraw(),
+        cancelDraw: () => this.client?.cancelDraw(),
       },
     );
 
@@ -477,6 +484,10 @@ class Game implements OnlineGame {
     this.sender.offerDraw();
   }
 
+  cancelDraw(): void {
+    this.sender.cancelDraw();
+  }
+
   /** Reports a message the session decided belongs to this game. */
   receive(
     message:
@@ -485,7 +496,8 @@ class Game implements OnlineGame {
       | Extract<ServerMessage, { type: "moveRejected" }>
       | Extract<ServerMessage, { type: "gameOver" }>
       | Extract<ServerMessage, { type: "opponentLeft" }>
-      | Extract<ServerMessage, { type: "drawOffered" }>,
+      | Extract<ServerMessage, { type: "drawOffered" }>
+      | Extract<ServerMessage, { type: "drawCancelled" }>,
   ): void {
     const listener = this.listener;
     if (!listener) return;
@@ -502,6 +514,9 @@ class Game implements OnlineGame {
         return;
       case "drawOffered":
         listener.drawOffered(message.color);
+        return;
+      case "drawCancelled":
+        listener.drawCancelled(message.color);
         return;
       case "gameOver":
         listener.gameOver(message.status, message.winner);

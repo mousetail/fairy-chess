@@ -58,7 +58,7 @@ export class DiscoveriesScreen implements Screen {
     const records = loadDiscoveries();
 
     const summary = document.createElement("p");
-    summary.classList.add("discovery-summary");
+    summary.classList.add("text-max-width");
     summary.textContent = discoverySummaryText(summarize(records));
     container.appendChild(summary);
 
@@ -67,7 +67,7 @@ export class DiscoveriesScreen implements Screen {
     }
 
     const backButton = document.createElement("button");
-    backButton.classList.add("play-button");
+    backButton.classList.add("button", "play-button");
     backButton.textContent = "Back";
     backButton.addEventListener("click", () => {
       this.deactivate();
@@ -146,7 +146,7 @@ export class DiscoveriesScreen implements Screen {
     if (record.defeatedOpponents.length > 0) {
       const opponents = document.createElement("div");
       opponents.classList.add("discovery-opponents");
-      opponents.textContent = `Beat ${record.defeatedOpponents.join(", ")}`;
+      opponents.textContent = `Beat ${record.defeatedOpponents.slice(0,1).join(", ")}`;
       card.appendChild(opponents);
     }
 
@@ -172,7 +172,7 @@ export class DiscoveriesScreen implements Screen {
     modal.appendChild(info.element);
 
     const closeButton = document.createElement("button");
-    closeButton.classList.add("modal-close");
+    closeButton.classList.add("button", "modal-close");
     closeButton.textContent = "Close";
     closeButton.addEventListener("click", () => this.closeModal());
     modal.appendChild(closeButton);

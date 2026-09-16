@@ -17,6 +17,27 @@ body {
   --arrow-color: #ff8c42;
 }
 
+/*
+ * The plain button used all over the interface: a white fill, a black outline,
+ * and a highlight on hover. A component pairs it with its own class for size,
+ * placement, and any colour that particular button needs on top.
+ */
+.button {
+  background: white;
+  border: 2px solid black;
+  color: black;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background-color: var(--highlighted-square-color);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+}
+
 .footer {
     text-align: center;
 }
@@ -362,16 +383,11 @@ body {
 }
 
 .play-again-button {
+  /* It sits inside the score widget's own border, so only its top edge shows. */
   border: none;
   border-top: 2px solid black;
-  background: white;
   padding: 0.5rem;
   font-size: 1rem;
-  cursor: pointer;
-
-  &:hover {
-    background-color: var(--highlighted-square-color);
-  }
 }
 
 #app {
@@ -391,8 +407,6 @@ body {
   display: flex;
 
   & button {
-    background: white;
-    border: 2px solid black;
     width: 2rem;
     height: 2rem;
     flex-grow: 1;
@@ -400,10 +414,6 @@ body {
 
     & img {
       height: 2rem;
-    }
-
-    &:hover {
-      background-color: var(--highlighted-square-color);
     }
 
     &:not(:first-child) {
@@ -445,13 +455,12 @@ label {
 
 button.play-button {
   width: 100%;
-  background: white;
-  border: 2px solid black;
   padding: 1rem;
   margin-top: 1rem;
   font-size: 1.2rem;
 
-  &:hover {
+  /* The chief action of its screen, so it lights up in a colour of its own. */
+  &:hover:not(:disabled) {
     background-color: #88cfcf;
   }
 }
@@ -605,25 +614,17 @@ button.play-button {
   flex: 1;
   min-width: 0;
   padding: 0.4rem;
-  border: 2px solid black;
-  background: white;
-  color: black;
   font-size: 0.9rem;
-  cursor: pointer;
-
-  &:hover:not(:disabled) {
-    background-color: var(--highlighted-square-color);
-  }
-
-  &:disabled {
-    opacity: 0.5;
-    cursor: default;
-  }
 }
 
 /* An armed resign button is asking to be clicked once more. */
 .resign-button.confirming {
   background-color: #f4b6b6;
+}
+
+/* So is an armed draw button, which two people at one board agree with. */
+.draw-button.confirming {
+  background-color: #b6d4f4;
 }
 
 /* Before a player has moved the button calls the game off instead, which is not
@@ -649,23 +650,15 @@ button.play-button {
   }
 }
 
-.discovery-summary {
+.text-max-width {
   max-width: 40rem;
   margin-top: 0.5rem;
 }
 
 button.discoveries-button {
-  background: white;
-  border: 2px solid black;
-  color: black;
   padding: 0.5rem 1rem;
   margin-top: 0.5rem;
   font-size: 1rem;
-  cursor: pointer;
-
-  &:hover {
-    background-color: var(--highlighted-square-color);
-  }
 }
 
 .discoveries {
@@ -776,14 +769,6 @@ button.discoveries-button {
 }
 
 .modal-close {
-  border: 2px solid black;
-  background: white;
-  color: black;
   padding: 0.5rem;
   font-size: 1rem;
-  cursor: pointer;
-
-  &:hover {
-    background-color: var(--highlighted-square-color);
-  }
 }

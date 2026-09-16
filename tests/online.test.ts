@@ -103,6 +103,15 @@ test("a draw offer is sent as an offer, so it can be matched", () => {
   assert.deepEqual(socket.sent, ['{"type":"offerDraw"}']);
 });
 
+test("taking a draw offer back is sent as a cancellation", () => {
+  const socket = new FakeSocket();
+  const { client } = clientOver(socket);
+  socket.emit("open", {});
+
+  client.cancelDraw();
+  assert.deepEqual(socket.sent, ['{"type":"cancelDraw"}']);
+});
+
 test("calling a game off is sent as an abort", () => {
   const socket = new FakeSocket();
   const { client } = clientOver(socket);
@@ -212,6 +221,10 @@ test("only messages with a type this build knows are accepted", () => {
   assert.equal(
     parseServerMessage('{"type":"drawOffered","color":"white"}')?.type,
     "drawOffered",
+  );
+  assert.equal(
+    parseServerMessage('{"type":"drawCancelled","color":"white"}')?.type,
+    "drawCancelled",
   );
   assert.equal(parseServerMessage('{"type":"goodbye"}'), undefined);
   // An array is an object, so it has to be turned away by hand.

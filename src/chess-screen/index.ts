@@ -133,6 +133,8 @@ export interface OnlineOpponent {
   abort(): void;
   /** Offers a draw, which the game is drawn on once the opponent offers too. */
   offerDraw(): void;
+  /** Takes back the draw offer this browser made, leaving the game running. */
+  cancelDraw(): void;
 }
 
 interface PlayerBar {
@@ -198,6 +200,11 @@ export default class ChessScreen implements Screen {
   private drawOffer: "none" | "mine" | "theirs" = "none";
   /** Whether the resign button is waiting for a second click to confirm. */
   private resignArmed = false;
+  /**
+   * Whether the draw button is waiting for a second click to confirm, which is
+   * how two people at one board agree a draw.
+   */
+  private drawArmed = false;
   /**
    * Whether this browser has made a move yet. Until it has, the game can be
    * called off rather than resigned, as it can on the server.
@@ -291,7 +298,7 @@ export default class ChessScreen implements Screen {
     this.resultReason.hidden = true;
     this.scoreWidget.appendChild(this.resultReason);
     this.playAgainButton = document.createElement("button");
-    this.playAgainButton.classList.add("play-again-button");
+    this.playAgainButton.classList.add("button", "play-again-button");
     this.playAgainButton.textContent = "Play again";
     this.scoreWidget.appendChild(this.playAgainButton);
 
@@ -348,48 +355,24 @@ export default class ChessScreen implements Screen {
       }
     });
 
-    if (this.online) {
-      const actions = document.createElement("div");
-      actions.classList.add("game-actions");
-      this.gameActions = actions;
+    const actions = document.createElement("div");
+    actions.classList.add("game-actions");
+    this.gameActions = actions;
 
-      const draw = document.createElement("button");
-      draw.classList.add("draw-button");
-      draw.textContent = "Offer draw";
-      draw.addEventListener("click", () => {
-        if (draw.disabled) return;
-        // The same message covers offering and accepting: the server draws the
-        // game once both sides have offered.
-        this.drawOffer = "mine";
-        this.renderDrawButton();
-        this.online?.offerDraw();
-      });
-      this.drawButton = draw;
-      actions.appendChild(draw);
+    const draw = document.createElement("button");
+    draw.classList.add("button", "draw-button");
+    draw.addEventListener("click", () => this.clickDraw());
+    this.drawButton = draw;
+    actions.appendChild(draw);
 
-      const resign = document.createElement("button");
-      resign.classList.add("resign-button");
-      // Before this browser has moved the game can be called off outright;
-      // after that, giving up is a resignation, which asks twice.
-      resign.addEventListener("click", () => {
-        if (resign.disabled) return;
-        if (this.canAbort()) {
-          resign.disabled = true;
-          this.online?.abort();
-          return;
-        }
-        if (!this.resignArmed) {
-          this.resignArmed = true;
-          this.renderResignButton();
-          return;
-        }
-        resign.disabled = true;
-        this.online?.resign();
-      });
-      this.resignButton = resign;
-      actions.appendChild(resign);
-      this.renderResignButton();
-    }
+    const resign = document.createElement("button");
+    resign.classList.add("button", "resign-button");
+    resign.addEventListener("click", () => this.clickResign());
+    this.resignButton = resign;
+    actions.appendChild(resign);
+
+    this.renderDrawButton();
+    this.renderResignButton();
 
     this.historyBar = new HistoryBar(
       sidebar,
@@ -611,6 +594,7 @@ export default class ChessScreen implements Screen {
     this.gameEnded = true;
     this.clearSelection();
     this.disarmResign();
+    this.disarmDraw();
     if (this.resignButton) this.resignButton.disabled = true;
     if (this.drawButton) this.drawButton.disabled = true;
     this.stopClock();
@@ -749,12 +733,103 @@ export default class ChessScreen implements Screen {
     this.renderDrawButton();
   }
 
+  /**
+   * Reports that someone took their draw offer back. Only the opponent's offer
+   * changes anything here: this browser's own was cleared when it asked to take
+   * it back, and its own message comes back echoed.
+   */
+  reportDrawCancelled(color: Color): void {
+    if (color === this.online?.color || this.drawOffer !== "theirs") return;
+    this.drawOffer = "none";
+    this.renderDrawButton();
+  }
+
+  /**
+   * Handles a press of the draw button, which means something different in each
+   * mode: an offer over the network, a simulated one against the engine, and
+   * half of an agreement between two people at one board.
+   */
+  private clickDraw(): void {
+    const button = this.drawButton;
+    if (!button || button.disabled) return;
+
+    if (this.online) {
+      if (this.drawOffer === "mine") {
+        // Pressing again takes the offer back rather than making another one.
+        this.drawOffer = "none";
+        this.renderDrawButton();
+        this.online.cancelDraw();
+        return;
+      }
+      // The same message covers offering and accepting: the server draws the
+      // game once both sides have offered.
+      this.drawOffer = "mine";
+      this.renderDrawButton();
+      this.online.offerDraw();
+      return;
+    }
+
+    if (this.aiPlayer) {
+      // The engine never answers an offer, so the button only simulates one,
+      // and pressing it again takes the offer back.
+      this.drawOffer = this.drawOffer === "mine" ? "none" : "mine";
+      this.renderDrawButton();
+      return;
+    }
+
+    // Two people at one board agree a draw by both saying so, so the second
+    // press is the confirmation.
+    if (!this.drawArmed) {
+      this.drawArmed = true;
+      this.renderDrawButton();
+      return;
+    }
+    this.setGameEnd("draw", null);
+  }
+
+  /**
+   * Handles a press of the resign button, which asks twice before giving up.
+   * Over the network the server ends the game; on this machine it ends here.
+   */
+  private clickResign(): void {
+    const button = this.resignButton;
+    if (!button || button.disabled) return;
+    if (this.canAbort()) {
+      button.disabled = true;
+      this.online?.abort();
+      return;
+    }
+    if (!this.resignArmed) {
+      this.resignArmed = true;
+      this.renderResignButton();
+      return;
+    }
+    button.disabled = true;
+    if (this.online) {
+      this.online.resign();
+    } else {
+      this.setGameEnd("resign", this.resigningColor());
+    }
+  }
+
+  /**
+   * The side a resignation is for: the one whose turn it is, or the person
+   * playing against the engine when the engine is the side to move.
+   */
+  private resigningColor(): Color {
+    const turn = this.game.state.turn;
+    if (this.game.players[turn].type === "human") return turn;
+    return invertColor(turn);
+  }
+
   /** Shows what the draw button would do, given the offers standing. */
   private renderDrawButton(): void {
     const button = this.drawButton;
     if (!button) return;
-    button.disabled = this.drawOffer === "mine";
-    button.textContent = this.drawOffer === "mine"
+    button.classList.toggle("confirming", this.drawArmed);
+    button.textContent = this.drawArmed
+      ? "Confirm draw"
+      : this.drawOffer === "mine"
       ? "Draw offered"
       : this.drawOffer === "theirs"
       ? "Accept draw"
@@ -808,6 +883,13 @@ export default class ChessScreen implements Screen {
     if (!this.resignArmed) return;
     this.resignArmed = false;
     this.renderResignButton();
+  }
+
+  /** Takes a draw button that is waiting for confirmation back to its start. */
+  private disarmDraw(): void {
+    if (!this.drawArmed) return;
+    this.drawArmed = false;
+    this.renderDrawButton();
   }
 
   /**
@@ -913,6 +995,7 @@ export default class ChessScreen implements Screen {
     if (event.button !== 0 || this.handlingPromotion) return;
     const target = event.target as Node | null;
     if (!this.resignButton?.contains(target)) this.disarmResign();
+    if (!this.drawButton?.contains(target)) this.disarmDraw();
     if (target && this.boardView.element.contains(target)) return;
     this.clearSelection();
   };

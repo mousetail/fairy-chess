@@ -16,7 +16,7 @@ import type { SerializedBoardState, SerializedMove } from "./serialization.ts";
  * The wire protocol version. Bumped whenever a message shape changes, or a
  * message gains a value that an older client would read wrongly.
  */
-export const PROTOCOL_VERSION = 3;
+export const PROTOCOL_VERSION = 4;
 
 export type Color = "white" | "black";
 
@@ -98,9 +98,15 @@ export type ClientMessage =
   | { type: "abort" }
   /**
    * Offer a draw. The offer stands until the opponent offers one too, which
-   * ends the game drawn; there is no way to take it back.
+   * ends the game drawn, or until this player takes it back with a
+   * `cancelDraw`.
    */
   | { type: "offerDraw" }
+  /**
+   * Take back a draw offer this player made. The opponent may still offer one
+   * of their own, which the game is drawn on once this player offers again.
+   */
+  | { type: "cancelDraw" }
   /** Answers the server's keepalive. */
   | { type: "pong" };
 
@@ -153,6 +159,11 @@ export type ServerMessage =
    * so the offerer can tell its own offer from the opponent's.
    */
   | { type: "drawOffered"; color: Color }
+  /**
+   * Someone took their draw offer back, naming the side that did. Sent to both
+   * players, so the opponent knows there is no longer an offer to accept.
+   */
+  | { type: "drawCancelled"; color: Color }
   | ({ type: "gameOver" } & GameResult)
   | { type: "opponentLeft"; winner: Color }
   | { type: "error"; message: string }
@@ -169,6 +180,7 @@ const serverMessageTypes = new Set<string>([
   "clock",
   "moveRejected",
   "drawOffered",
+  "drawCancelled",
   "gameOver",
   "opponentLeft",
   "error",
