@@ -1,14 +1,17 @@
-import ChessScreen, { type ChessScreenOptions } from "./chess-screen/index.ts";
+import type { ChessScreenOptions } from "./chess-screen/index.ts";
 import type { Player } from "./chess-game.ts";
 import {
   discoverySummaryText,
   loadDiscoveries,
   summarize,
 } from "./discoveries.ts";
-import { DiscoveriesScreen } from "./discoveries-screen.ts";
-import { MatchmakingScreen } from "./online/matchmaking-screen.ts";
+import {
+  type MatchmakingSession,
+  type MatchmakingStatus,
+} from "./online/session.ts";
 import { chaosLevels } from "./replacement-rules.ts";
 import type { Screen } from "./screen.ts";
+import type { HomeScreenSettings } from "./settings.ts";
 import pieceTypes from "./pieces/piece_types/index.ts";
 import kingPieces from "./pieces/piece_types/kings.ts";
 import pawnPieces from "./pieces/piece_types/pawns.ts";
@@ -23,21 +26,27 @@ interface SliderGroup {
   getValue(): string;
 }
 
-/** The selections made on the home screen, used to restore them on a rematch. */
-export interface HomeScreenSettings {
-  mode: string;
-  minTurnTime: string;
-  difficulty: string;
-  chaosLevel: string;
-  /** The name to show an online opponent, or an empty string for none. */
-  playerName: string;
+/** What the home screen needs from the app that shows it. */
+export interface HomeScreenOptions {
+  /** The selections to show, which the app keeps so a visit away loses none. */
+  settings: HomeScreenSettings;
+  /** Reports the selections whenever they change, to be kept and stored. */
+  onSettingsChange(settings: HomeScreenSettings): void;
+  /** Shows the discoveries screen, whose Back leads here again. */
+  onDiscoveries(): void;
+  /** Starts a game played on this machine, from the selections made. */
+  onLocalGame(options: ChessScreenOptions): void;
 }
 
 export class HomeScreen implements Screen {
-  private readonly initialSettings?: HomeScreenSettings;
+  private readonly matchmaking: MatchmakingSession;
+  private readonly options: HomeScreenOptions;
+  /** Stops following the search, once the screen is showing. */
+  private unwatch: (() => void) | null = null;
 
-  constructor(initialSettings?: HomeScreenSettings) {
-    this.initialSettings = initialSettings;
+  constructor(matchmaking: MatchmakingSession, options: HomeScreenOptions) {
+    this.matchmaking = matchmaking;
+    this.options = options;
   }
 
   activate(parent: HTMLElement) {
@@ -75,7 +84,7 @@ export class HomeScreen implements Screen {
     const modeRadio = this.createRadio(
       "mode",
       modeOptions,
-      this.indexOfOption(modeOptions, this.initialSettings?.mode),
+      this.indexOfOption(modeOptions, this.options.settings.mode),
     );
     modeRadio.element.classList.add("button-radio");
     container.appendChild(modeRadio.element);
@@ -101,7 +110,7 @@ export class HomeScreen implements Screen {
     minTurnTimeInput.type = "number";
     minTurnTimeInput.min = "0";
     minTurnTimeInput.step = "0.5";
-    minTurnTimeInput.value = this.initialSettings?.minTurnTime ?? "1";
+    minTurnTimeInput.value = this.options.settings.minTurnTime;
     minTurnTimeLabel.appendChild(minTurnTimeInput);
     aiOptions.appendChild(minTurnTimeLabel);
 
@@ -110,7 +119,7 @@ export class HomeScreen implements Screen {
       "Difficulty",
       difficultyOptions,
       this.sliderIndex(
-        this.initialSettings?.difficulty,
+        this.options.settings.difficulty,
         difficultyOptions.length,
         1,
       ),
@@ -136,7 +145,7 @@ export class HomeScreen implements Screen {
     // The server caps a name at the same length; this only saves the round trip.
     nameInput.maxLength = 24;
     nameInput.placeholder = "Anonymous";
-    nameInput.value = this.initialSettings?.playerName ?? "";
+    nameInput.value = this.options.settings.playerName;
     nameLabel.appendChild(nameInput);
     onlineOptions.appendChild(nameLabel);
 
@@ -149,12 +158,16 @@ export class HomeScreen implements Screen {
 
     container.appendChild(onlineOptions);
 
-    const updateAiOptionsVisibility = () => {
-      aiOptions.hidden = modeRadio.getValue() !== "vs AI";
-      onlineOptions.hidden = modeRadio.getValue() !== "Online";
+    const updateOptionVisibility = () => {
+      const mode = modeRadio.getValue();
+      aiOptions.hidden = mode !== "vs AI";
+      onlineOptions.hidden = mode !== "Online";
+      // Leaving the online mode gives up a search that is still running, so the
+      // Play button is free for a game played here.
+      if (mode !== "Online") this.matchmaking.cancel();
     };
-    updateAiOptionsVisibility();
-    modeRadio.element.addEventListener("change", updateAiOptionsVisibility);
+    updateOptionVisibility();
+    modeRadio.element.addEventListener("change", updateOptionVisibility);
 
     const chaosLevelSubHeader = document.createElement("h2");
     chaosLevelSubHeader.textContent = "Chaos Level Preference";
@@ -165,12 +178,31 @@ export class HomeScreen implements Screen {
       "Chaos Level",
       chaosOptions,
       this.sliderIndex(
-        this.initialSettings?.chaosLevel,
+        this.options.settings.chaosLevel,
         chaosOptions.length,
         2,
       ),
     );
     container.appendChild(chaosLevelSlider.element);
+
+    // The search takes the Play button's place rather than a page of its own:
+    // the player can keep reading their discoveries while they wait, and the
+    // board is put up whenever an opponent turns up.
+    const statusBox = document.createElement("div");
+    statusBox.classList.add("online-status");
+    statusBox.hidden = true;
+
+    const statusText = document.createElement("p");
+    statusText.classList.add("online-status-text");
+    statusBox.appendChild(statusText);
+
+    const cancelButton = document.createElement("button");
+    cancelButton.classList.add("cancel-search");
+    cancelButton.textContent = "Cancel";
+    cancelButton.addEventListener("click", () => this.matchmaking.cancel());
+    statusBox.appendChild(cancelButton);
+
+    container.appendChild(statusBox);
 
     const playButton = document.createElement("button");
     playButton.textContent = "Play";
@@ -184,36 +216,48 @@ export class HomeScreen implements Screen {
       chaosLevel: chaosLevelSlider.getValue(),
       playerName: nameInput.value,
     });
+    const report = () => this.options.onSettingsChange(currentSettings());
+    container.addEventListener("change", report);
+
+    this.unwatch = this.matchmaking.watch((status) => {
+      const searching = status.state === "connecting" ||
+        status.state === "queued";
+      playButton.hidden = searching;
+      statusBox.hidden = !searching && status.state !== "error";
+      statusText.classList.toggle("error", status.state === "error");
+      statusText.textContent = describeStatus(
+        status,
+        this.matchmaking.complexityLabel,
+      );
+      cancelButton.hidden = !searching;
+    });
 
     discoveriesButton.addEventListener("click", () => {
-      const settings = currentSettings();
-      this.deactivate();
-      new DiscoveriesScreen(
-        () => new HomeScreen(settings).activate(parent),
-      ).activate(parent);
+      report();
+      this.options.onDiscoveries();
     });
 
     playButton.addEventListener("click", () => {
       const settings = currentSettings();
-      this.deactivate();
+      report();
 
       if (settings.mode === "Online") {
-        new MatchmakingScreen({
-          complexity: this.chaosLevelIndex(settings.chaosLevel),
-          name: settings.playerName,
-          onLeave: () => new HomeScreen(settings).activate(parent),
-        }).activate(parent);
+        // The search runs alongside this screen, so there is nothing to leave.
+        this.matchmaking.queue(
+          this.chaosLevelIndex(settings.chaosLevel),
+          settings.playerName,
+        );
         return;
       }
 
-      const options = this.buildOptions(
-        settings.mode,
-        minTurnTimeInput,
-        difficultySlider.getValue(),
-        settings.chaosLevel,
+      this.options.onLocalGame(
+        this.buildOptions(
+          settings.mode,
+          minTurnTimeInput,
+          difficultySlider.getValue(),
+          settings.chaosLevel,
+        ),
       );
-      options.onPlayAgain = () => new HomeScreen(settings).activate(parent);
-      new ChessScreen(options).activate(parent);
     });
   }
 
@@ -339,5 +383,25 @@ export class HomeScreen implements Screen {
     };
   }
 
-  deactivate() {}
+  deactivate() {
+    this.unwatch?.();
+    this.unwatch = null;
+  }
+}
+
+/** The line shown while a search is running, or after one has failed. */
+function describeStatus(status: MatchmakingStatus, level: string): string {
+  switch (status.state) {
+    case "idle":
+      return "";
+    case "connecting":
+      return `Looking for an opponent at ${level}\u2026`;
+    case "queued":
+      return status.waiting <= 1
+        ? `Looking for an opponent at ${level}\u2026`
+        : `Looking for an opponent at ${level}\u2026 ` +
+          `(${status.waiting} players waiting)`;
+    case "error":
+      return status.message;
+  }
 }

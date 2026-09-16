@@ -71,6 +71,8 @@ export function parseClientMessage(raw: string): ParseResult {
     }
     case "resign":
       return { ok: true, message: { type: "resign" } };
+    case "offerDraw":
+      return { ok: true, message: { type: "offerDraw" } };
     case "pong":
       return { ok: true, message: { type: "pong" } };
     default:

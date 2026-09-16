@@ -1,6 +1,6 @@
 import type { Piece, SpecialMovement } from "../chess-board.ts";
 import type { Tile } from "../chess-tile.ts";
-import { tileFromEvent } from "./board-geometry.ts";
+import { tileFromEvent, tileOffset } from "./board-geometry.ts";
 
 type DragState = {
   piece: Piece;
@@ -47,13 +47,14 @@ export class PieceDragController {
 
     // Position the piece in pixels so it can follow the pointer exactly.
     const cellSize = this.boardElement.getBoundingClientRect().width / 8;
+    const start = tileOffset(this.boardElement, piece.position, cellSize);
     this.dragState = {
       piece,
       pointerId: event.pointerId,
       startClientX: event.clientX,
       startClientY: event.clientY,
-      startImageX: piece.position.x * cellSize,
-      startImageY: (7 - piece.position.y) * cellSize,
+      startImageX: start.x,
+      startImageY: start.y,
       moved: false,
     };
     image.classList.add("dragging");
@@ -113,16 +114,16 @@ export class PieceDragController {
     window.removeEventListener("pointercancel", this.onPointerCancel);
 
     const image = this.host.getPieceImage(drag.piece.id);
-    if (image) {
-      image.classList.remove("dragging");
-      image.style.transform = "";
-    }
+    if (image) image.classList.remove("dragging");
     this.host.setDragHighlight(null);
     this.dragState = null;
 
     // Without meaningful movement this was a tap; the click handler will
     // manage the selection.
-    if (!drag.moved) return;
+    if (!drag.moved) {
+      if (image) image.style.transform = "";
+      return;
+    }
 
     const selection = this.host.getSelection();
     const move =
@@ -134,8 +135,12 @@ export class PieceDragController {
         : undefined;
 
     if (move) {
+      // The piece is left where it was dropped rather than snapping back: the
+      // screen moves it for real once the move is settled, and puts it back
+      // when it is not.
       this.host.performMove(drag.piece, move);
     } else {
+      if (image) image.style.transform = "";
       this.host.clearSelection();
     }
   }

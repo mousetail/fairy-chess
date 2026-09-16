@@ -94,6 +94,12 @@ export interface ChessScreenOptions {
   playerNames?: Partial<Record<Color, string>>;
   /** Set when the game is played against someone over the network. */
   online?: OnlineOpponent;
+  /**
+   * The name of the level the game is played at, shown while it lasts. Only a
+   * game the server laid out has one: a local game uses the level the player
+   * picked, which the home screen has already shown them.
+   */
+  levelLabel?: string;
   onPlayAgain?: () => void;
 }
 
@@ -105,13 +111,15 @@ export interface OnlineOpponent {
   requestMove(request: MoveRequest): void;
   /** Asks the server to end the game in the opponent's favour. */
   resign(): void;
+  /** Offers a draw, which the game is drawn on once the opponent offers too. */
+  offerDraw(): void;
 }
 
 /**
  * How a game ended. The local rules only ever reach the first two; only the
- * server can call a game on a resignation.
+ * server can call a game on a resignation or an agreed draw.
  */
-export type GameEndStatus = GameStatus | "resign";
+export type GameEndStatus = GameStatus | "resign" | "draw";
 
 interface PlayerBar {
   element: HTMLDivElement;
@@ -164,6 +172,14 @@ export default class ChessScreen implements Screen {
   /** Where a short message for the player is shown, once the screen is up. */
   private noticeElement: HTMLParagraphElement | null = null;
   private resignButton: HTMLButtonElement | null = null;
+  private drawButton: HTMLButtonElement | null = null;
+  /** The row holding the resign and draw buttons, once the screen is up. */
+  private gameActions: HTMLDivElement | null = null;
+  /**
+   * The draw offers standing: this browser's, the opponent's, or neither. A
+   * move clears them, as it does on the server.
+   */
+  private drawOffer: "none" | "mine" | "theirs" = "none";
   /**
    * The piece types the game was set up with. A finished game credits every one
    * of them, whichever player ended up with it.
@@ -216,6 +232,11 @@ export default class ChessScreen implements Screen {
       onTileClick: (tile) => this.clickTile(tile),
       onPointerDown: (event) => this.onBoardPointerDown(event),
     });
+    // Playing black shows the board from black's side, so the pieces this
+    // browser commands are the ones nearest the bottom of the screen.
+    if (this.online?.color === "black") {
+      this.boardView.element.classList.add("black");
+    }
     this.arrowsLayer = new ArrowsLayer(this.boardView.element);
     this.dragController = new PieceDragController(this.boardView.element, {
       getPieceImage: (id) => this.boardView.getPieceImage(id),
@@ -250,6 +271,11 @@ export default class ChessScreen implements Screen {
 
     const leftColumn = document.createElement("div");
     leftColumn.classList.add("left-column");
+    // Seen from black's side the player bars swap over, so the bar belonging to
+    // the side at the bottom of the screen sits below the board too.
+    if (this.online?.color === "black") {
+      leftColumn.classList.add("black");
+    }
     parent.appendChild(leftColumn);
 
     this.boardView.clearPieces();
@@ -270,6 +296,13 @@ export default class ChessScreen implements Screen {
     this.noticeElement.hidden = true;
     sidebar.appendChild(this.noticeElement);
 
+    if (this.options.levelLabel) {
+      const level = document.createElement("p");
+      level.classList.add("game-level");
+      level.textContent = `Playing at: ${this.options.levelLabel}`;
+      sidebar.appendChild(level);
+    }
+
     sidebar.appendChild(this.scoreWidget);
     sidebar.appendChild(this.pieceInfoBar.element);
     this.playAgainButton.addEventListener("click", () => {
@@ -282,14 +315,39 @@ export default class ChessScreen implements Screen {
     });
 
     if (this.online) {
+      const actions = document.createElement("div");
+      actions.classList.add("game-actions");
+      this.gameActions = actions;
+
+      const draw = document.createElement("button");
+      draw.classList.add("draw-button");
+      draw.textContent = "Offer draw";
+      draw.addEventListener("click", () => {
+        if (draw.disabled) return;
+        // The same message covers offering and accepting: the server draws the
+        // game once both sides have offered.
+        this.drawOffer = "mine";
+        this.renderDrawButton();
+        this.online?.offerDraw();
+      });
+      this.drawButton = draw;
+      actions.appendChild(draw);
+
       const resign = document.createElement("button");
       resign.classList.add("resign-button");
       resign.textContent = "Resign";
+      // Resigning asks twice: one click arms the button, the next gives up.
       resign.addEventListener("click", () => {
+        if (!resign.classList.contains("confirming")) {
+          resign.classList.add("confirming");
+          resign.textContent = "Confirm resign";
+          return;
+        }
         resign.disabled = true;
         this.online?.resign();
       });
       this.resignButton = resign;
+      actions.appendChild(resign);
     }
 
     this.historyBar = new HistoryBar(
@@ -311,7 +369,7 @@ export default class ChessScreen implements Screen {
     );
 
     // Below the move log, so it is out of the way of the game itself.
-    if (this.resignButton) sidebar.appendChild(this.resignButton);
+    if (this.gameActions) sidebar.appendChild(this.gameActions);
 
     document.addEventListener("keydown", this.onKeyDown);
     document.addEventListener("pointerdown", this.onDocumentPointerDown);
@@ -501,7 +559,9 @@ export default class ChessScreen implements Screen {
     if (this.gameEnded) return;
     this.gameEnded = true;
     this.clearSelection();
+    this.disarmResign();
     if (this.resignButton) this.resignButton.disabled = true;
+    if (this.drawButton) this.drawButton.disabled = true;
     if (status === "checkmate") {
       const king = this.game.state.pieces.find(
         (piece) => piece.type.royal && piece.color === color,
@@ -509,7 +569,7 @@ export default class ChessScreen implements Screen {
       this.boardView.setCheckmatedKing(king ? king.id : null);
     }
     this.scoreWidget.classList.remove("hidden");
-    if (status === "stalemate") {
+    if (status === "stalemate" || status === "draw") {
       this.scoreDisplay.textContent = "½-½";
     } else {
       this.scoreDisplay.textContent = color === "white" ? "0-1" : "1-0";
@@ -543,13 +603,16 @@ export default class ChessScreen implements Screen {
     this.visibleState = state;
     this.onlineRequest = null;
 
-    this.boardView.clearPieces();
-    for (const piece of state.pieces) {
-      this.boardView.addPiece(piece);
-    }
+    // The pieces are brought over rather than replaced, so the one that moved
+    // slides to its new square instead of appearing there.
+    this.boardView.syncPieces(state.pieces);
     if (state.lastMove) {
       this.boardView.setHighlightedMoves(state.lastMove);
     }
+    // A move is a fresh start for both buttons, as it is for the offers on the
+    // server.
+    this.disarmResign();
+    this.clearDrawOffer();
     this.updateCheckMarkers(state, inCheck);
     this.arrowsLayer.clear();
     this.clearSelection();
@@ -577,9 +640,48 @@ export default class ChessScreen implements Screen {
       }
       this.showNotice("The server did not say what to promote to.");
     } else {
+      // A refused move never happened, so the piece is put back where the
+      // server says it is; a drag may have left it on the square it was
+      // dropped on.
+      this.boardView.syncPieces(this.game.state.pieces);
       this.showNotice(rejectionText(rejection));
     }
     this.onlineRequest = null;
+  }
+
+  /**
+   * Reports that the opponent offered a draw, which this browser takes as a
+   * chance to accept. A move clears the offer again, so nothing is said about
+   * it beyond the button changing.
+   */
+  reportDrawOffer(color: Color): void {
+    // An offer this browser made is answered by the opponent's, which ends the
+    // game, and its own offer comes back echoed, so neither needs acting on.
+    if (color === this.online?.color || this.drawOffer === "mine") return;
+    this.drawOffer = "theirs";
+    this.renderDrawButton();
+  }
+
+  /** Shows what the draw button would do, given the offers standing. */
+  private renderDrawButton(): void {
+    const button = this.drawButton;
+    if (!button) return;
+    button.disabled = this.drawOffer === "mine";
+    button.textContent = this.drawOffer === "mine"
+      ? "Draw offered"
+      : this.drawOffer === "theirs"
+      ? "Accept draw"
+      : "Offer draw";
+  }
+
+  /**
+   * Puts a draw offer back in the players' hands, which a move does on the
+   * server as well.
+   */
+  private clearDrawOffer(): void {
+    if (this.drawOffer === "none") return;
+    this.drawOffer = "none";
+    this.renderDrawButton();
   }
 
   /** Shows a short message in the sidebar, for what the game cannot say. */
@@ -587,6 +689,14 @@ export default class ChessScreen implements Screen {
     if (!this.noticeElement) return;
     this.noticeElement.textContent = text;
     this.noticeElement.hidden = false;
+  }
+
+  /** Takes a resign button that is waiting for confirmation back to its start. */
+  private disarmResign(): void {
+    const button = this.resignButton;
+    if (!button || !button.classList.contains("confirming")) return;
+    button.classList.remove("confirming");
+    button.textContent = "Resign";
   }
 
   /**
@@ -598,8 +708,11 @@ export default class ChessScreen implements Screen {
   private recordDiscovery(status: GameEndStatus, color: Color): void {
     const playerColor: Color = this.online?.color ??
       (this.game.players.white.type === "human" ? "white" : "black");
-    const outcome: GameOutcome =
-      status === "stalemate" ? "tie" : color === playerColor ? "loss" : "win";
+    const outcome: GameOutcome = status === "stalemate" || status === "draw"
+      ? "tie"
+      : color === playerColor
+      ? "loss"
+      : "win";
     recordGame({
       pieces: this.piecesInPlay,
       outcome,
@@ -650,12 +763,15 @@ export default class ChessScreen implements Screen {
   };
 
   /**
-   * Clicking anywhere off the board drops the movement selection. The sidebar is
-   * left alone, so the last inspected piece stays on display.
+   * Clicking anywhere off the board drops the movement selection, and puts an
+   * armed resign button back, so confirming a resignation always takes two
+   * clicks on the button itself. The sidebar is left alone, so the last
+   * inspected piece stays on display.
    */
   private onDocumentPointerDown = (event: PointerEvent): void => {
     if (event.button !== 0 || this.handlingPromotion) return;
     const target = event.target as Node | null;
+    if (!this.resignButton?.contains(target)) this.disarmResign();
     if (target && this.boardView.element.contains(target)) return;
     this.clearSelection();
   };

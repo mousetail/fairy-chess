@@ -166,6 +166,44 @@ Deno.test("two clients are matched and play a game over a websocket", async () =
   }
 });
 
+Deno.test("a game is drawn once both players have offered one", async () => {
+  const { running, origin } = startLocalServer();
+  const clients: TestClient[] = [];
+
+  try {
+    const first = new TestClient(`ws://${origin}/ws`);
+    const second = new TestClient(`ws://${origin}/ws`);
+    clients.push(first, second);
+    await Promise.all([first.ready, second.ready]);
+    await Promise.all([first.next("welcome"), second.next("welcome")]);
+
+    first.send({ type: "join", complexity: 0, name: "Ada" });
+    second.send({ type: "join", complexity: 0, name: "Bob" });
+    const [firstMatch] = await Promise.all([
+      first.next("matched"),
+      second.next("matched"),
+    ]);
+
+    first.send({ type: "offerDraw" });
+    // Both players hear who offered, including the one that did.
+    assert.equal((await first.next("drawOffered")).color, firstMatch.color);
+    assert.equal((await second.next("drawOffered")).color, firstMatch.color);
+
+    second.send({ type: "offerDraw" });
+    const drawn = await first.next("gameOver");
+    assert.equal(drawn.status, "draw");
+    assert.equal(drawn.winner, "draw");
+    assert.equal((await second.next("gameOver")).status, "draw");
+
+    // The game is over, so a further offer is refused rather than drawing.
+    first.send({ type: "offerDraw" });
+    assert.match((await first.next("error")).message, /not in a game/);
+  } finally {
+    for (const client of clients) client.close();
+    await running.server.shutdown();
+  }
+});
+
 Deno.test("a client that is not playing is told so, and survives nonsense", async () => {
   const { running, origin } = startLocalServer();
   const client = new TestClient(`ws://${origin}/ws`);

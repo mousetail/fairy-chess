@@ -1,5 +1,6 @@
 import type { Piece, SpecialMovement, TaggedMove } from "../chess-board.ts";
 import type { Tile } from "../chess-tile.ts";
+import type { PieceType } from "../pieces/piece_types/index.ts";
 import { getImageFromPromise } from "./piece-images.ts";
 
 export interface BoardHandlers {
@@ -14,6 +15,8 @@ export class BoardView {
   private readonly grid: HTMLDivElement;
   private readonly cellRows: HTMLDivElement[][] = [];
   private readonly piecesDivs: Map<number, HTMLImageElement> = new Map();
+  /** The type each piece on the board is drawn as, so a promotion can swap it. */
+  private readonly pieceTypes: Map<number, PieceType> = new Map();
   private readonly checkMarker: HTMLDivElement;
   private dragHighlight: HTMLDivElement | null = null;
   private highlightedTiles: HTMLDivElement[] = [];
@@ -27,6 +30,7 @@ export class BoardView {
     );
 
     this.grid = document.createElement("div");
+    this.grid.classList.add("grid");
     this.element.appendChild(this.grid);
     for (let i = 0; i < 8; i++) {
       const row = document.createElement("div");
@@ -69,10 +73,38 @@ export class BoardView {
     const image = getImageFromPromise(piece.type.image, piece.color);
     image.classList.add("board-piece");
     this.piecesDivs.set(piece.id, image);
+    this.pieceTypes.set(piece.id, piece.type);
     this.element.appendChild(image);
 
     image.style.setProperty("--x", `${piece.position.x}`);
     image.style.setProperty("--y", `${piece.position.y}`);
+  }
+
+  /**
+   * Brings the board in line with `pieces`, the way the server last described
+   * it.
+   *
+   * A piece that is already on the board is moved rather than replaced, so it
+   * slides to its new square instead of jumping there. Only a piece that has
+   * appeared, changed type (a promotion) or gone is added or removed.
+   */
+  syncPieces(pieces: Piece[]): void {
+    const wanted = new Map(pieces.map((piece) => [piece.id, piece]));
+    for (const [id, image] of this.piecesDivs) {
+      const piece = wanted.get(id);
+      if (!piece || this.pieceTypes.get(id) !== piece.type) {
+        image.remove();
+        this.piecesDivs.delete(id);
+        this.pieceTypes.delete(id);
+      }
+    }
+    for (const piece of pieces) {
+      if (this.piecesDivs.has(piece.id)) {
+        this.movePiece(piece.id, piece.position);
+      } else {
+        this.addPiece(piece);
+      }
+    }
   }
 
   destroyPiece(id: number): void {
@@ -82,6 +114,7 @@ export class BoardView {
     }
     image.remove();
     this.piecesDivs.delete(id);
+    this.pieceTypes.delete(id);
   }
 
   movePiece(pieceId: number, tile: Tile): void {
@@ -89,6 +122,9 @@ export class BoardView {
     if (!image) {
       throw new Error(`Piece to move not found: ${pieceId}`);
     }
+    // A piece that was being dragged is positioned in pixels; the square it is
+    // moving to takes over from here.
+    image.style.transform = "";
     image.style.setProperty("--x", `${tile.x}`);
     image.style.setProperty("--y", `${tile.y}`);
   }
@@ -100,6 +136,7 @@ export class BoardView {
   clearPieces(): void {
     this.piecesDivs.forEach((image) => image.remove());
     this.piecesDivs.clear();
+    this.pieceTypes.clear();
   }
 
   /** Marks the square a dragged piece would be dropped on, if any. */

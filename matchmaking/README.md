@@ -120,6 +120,7 @@ knows about, so a client can adapt rather than guess.
 | `cancelQueue` | —                                                                     | Leave the queue. Answered with `queueCancelled`.                                                      |
 | `move`        | `pieceId: number`, `from: {x, y}`, `to: {x, y}`, `promotion?: string` | Ask to play a move. `promotion` is a piece type key from the registry in `../src/pieces/piece_types`. |
 | `resign`      | —                                                                     | End the game in your opponent's favour.                                                               |
+| `offerDraw`   | —                                                                     | Offer a draw, or accept the one the opponent offered. A move clears the offers.                       |
 | `pong`        | —                                                                     | Answers the server's keepalive.                                                                       |
 
 Squares are zero-based board coordinates, matching `Tile` in
@@ -135,7 +136,8 @@ Squares are zero-based board coordinates, matching `Tile` in
 | `matched`        | `gameId`, `color`, `opponentName`, `complexity`, `complexityLabel`, `board`       | A game has started. `board` is the starting position the server laid out.                                                           |
 | `moved`          | `color`, `move`, `pgn`, `board`, `inCheck`                                        | A move was accepted and applied. `board` is the position after it; `inCheck` says whether the side that must move next is in check. |
 | `moveRejected`   | `rejection`                                                                       | Your move was refused; see the reasons below.                                                                                       |
-| `gameOver`       | `status`, `winner`                                                                | The game ended: `checkmate`, `stalemate` or `resign`, and who won (`"white"`, `"black"` or `"draw"`).                               |
+| `drawOffered`    | `color`                                                                           | Someone offered a draw. Sent to both players, naming the side that offered. It stands until a move is played.                       |
+| `gameOver`       | `status`, `winner`                                                                | The game ended: `checkmate`, `stalemate`, `resign` or `draw`, and who won (`"white"`, `"black"` or `"draw"`).                       |
 | `opponentLeft`   | `winner`                                                                          | Your opponent's connection dropped, so you win.                                                                                     |
 | `error`          | `message`                                                                         | A message could not be understood, or arrived at the wrong moment. The socket stays open.                                           |
 | `ping`           | —                                                                                 | Keepalive; answer with `pong`.                                                                                                      |
@@ -145,6 +147,16 @@ A `moveRejected` carries one of `game-over`, `not-your-turn`, `unknown-piece`,
 (with `options`, the piece type keys the move may promote to). The last one
 exists so a client that does not know the promotion rules can ask the player and
 try again.
+
+A draw is agreed rather than asked for: the game is drawn as soon as both
+players have offered one, and there is no way to decline, so a player who does
+not want a draw simply does not offer one. Both players are told who offered, so
+the one that did can tell its own offer from the opponent's.
+
+An offer only stands until a move is played: a move clears both sides' offers,
+because a position that has moved on is a new question. Clients do the same when
+the `moved` message reaches them, so both ends agree on which offers are live
+without another message between them.
 
 ### A short game
 
@@ -175,13 +187,19 @@ the browser and the server cannot drift apart.
 
 On the browser side, `../src/online/` holds the pieces that speak this protocol:
 
-| File                    | Role                                                                                                  |
-| ----------------------- | ----------------------------------------------------------------------------------------------------- |
-| `protocol.ts`           | The message types, shared with this server, and `parseServerMessage` for reading an untrusted frame.  |
-| `serialization.ts`      | Converts a board or a move to and from JSON.                                                          |
-| `client.ts`             | The socket: queues what is sent before it opens, answers keepalives, reports what arrives.            |
-| `matchmaking-screen.ts` | The waiting panel and the game that follows, handing the board a position and a way to ask for moves. |
-| `config.ts`             | Reads `VITE_MATCHMAKING_URL` and falls back to the known deployments.                                 |
+| File               | Role                                                                                                 |
+| ------------------ | ---------------------------------------------------------------------------------------------------- |
+| `protocol.ts`      | The message types, shared with this server, and `parseServerMessage` for reading an untrusted frame. |
+| `serialization.ts` | Converts a board or a move to and from JSON.                                                         |
+| `client.ts`        | The socket: queues what is sent before it opens, answers keepalives, reports what arrives.           |
+| `session.ts`       | The connection and the state of the search, held by the app rather than by any one screen.           |
+| `config.ts`        | Reads `VITE_MATCHMAKING_URL` and falls back to the known deployments.                                |
+
+`../src/app.ts` owns the screen on show and the session, so a player who is
+waiting for an opponent keeps browsing their discoveries instead of sitting on a
+waiting page; the board appears whenever the opponent does. The home screen's
+settings, including the name a player goes by online, are kept in local storage
+by `../src/settings.ts`.
 
 ## Tests
 
@@ -194,7 +212,8 @@ If your machine routes traffic through a proxy (`HTTP_PROXY` and friends) and
 does not exempt localhost, set `NO_PROXY=127.0.0.1,localhost` for the test run.
 
 The browser half is tested by the repository's `npm test`, which covers the
-message parser, the socket's behaviour against a stand-in, and the URL fallback.
+message parser, the socket's behaviour against a stand-in, the session that owns
+the search, the stored settings, and the URL fallback.
 
 ## Type checking
 

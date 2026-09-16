@@ -1,6 +1,5 @@
-import { HomeScreen } from "./home-screen.ts";
+import { App } from "./app.ts";
 
-const app = document.getElementById("app")!;
+const parent = document.getElementById("app")!;
 
-const screen = new HomeScreen();
-screen.activate(app);
+new App(parent).start();

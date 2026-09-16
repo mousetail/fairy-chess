@@ -196,6 +196,16 @@ Deno.test("a resignation hands the win to the opponent", () => {
   );
 });
 
+Deno.test("an agreed draw ends the game level", () => {
+  const session = new GameSession(0);
+  assert.deepEqual(session.draw(), { status: "draw", winner: "draw" });
+  assert.deepEqual(session.finished, { status: "draw", winner: "draw" });
+  assert.equal(
+    expectRefused(play(session, "white", 4, [4, 1], [4, 3])).reason,
+    "game-over",
+  );
+});
+
 Deno.test("every chaos level lays out a playable board", () => {
   for (let level = minComplexity; level <= maxComplexity; level++) {
     const session = new GameSession(level);

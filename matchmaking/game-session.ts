@@ -130,6 +130,13 @@ export class GameSession {
     return result;
   }
 
+  /** Ends the game level, because both players agreed to it. */
+  draw(): GameResult {
+    const result: GameResult = { status: "draw", winner: "draw" };
+    this.result = result;
+    return result;
+  }
+
   private apply(
     color: Color,
     piece: Piece,

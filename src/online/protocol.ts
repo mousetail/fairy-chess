@@ -16,7 +16,7 @@ export const PROTOCOL_VERSION = 1;
 
 export type Color = "white" | "black";
 
-export type GameOverStatus = "checkmate" | "stalemate" | "resign";
+export type GameOverStatus = "checkmate" | "stalemate" | "resign" | "draw";
 
 export type GameResult = {
   status: GameOverStatus;
@@ -59,6 +59,11 @@ export type ClientMessage =
   | { type: "cancelQueue" }
   | ({ type: "move" } & MoveRequest)
   | { type: "resign" }
+  /**
+   * Offer a draw. The offer stands until the opponent offers one too, which
+   * ends the game drawn; there is no way to take it back.
+   */
+  | { type: "offerDraw" }
   /** Answers the server's keepalive. */
   | { type: "pong" };
 
@@ -97,6 +102,11 @@ export type ServerMessage =
       inCheck: boolean;
     }
   | { type: "moveRejected"; rejection: MoveRejection }
+  /**
+   * Someone offered a draw. Sent to both players, naming the side that offered,
+   * so the offerer can tell its own offer from the opponent's.
+   */
+  | { type: "drawOffered"; color: Color }
   | ({ type: "gameOver" } & GameResult)
   | { type: "opponentLeft"; winner: Color }
   | { type: "error"; message: string }
@@ -111,6 +121,7 @@ const serverMessageTypes = new Set<string>([
   "matched",
   "moved",
   "moveRejected",
+  "drawOffered",
   "gameOver",
   "opponentLeft",
   "error",

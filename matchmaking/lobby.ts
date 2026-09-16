@@ -29,6 +29,11 @@ interface Room {
   session: GameSession;
   clients: Record<Color, Client>;
   names: Record<Color, string>;
+  /**
+   * The sides that have offered a draw. An offer stands for the rest of the
+   * game, so the game is drawn as soon as both sides are in here.
+   */
+  drawOffers: Set<Color>;
 }
 
 export interface LobbyOptions {
@@ -81,6 +86,9 @@ export class Lobby {
         return;
       case "resign":
         this.resign(client);
+        return;
+      case "offerDraw":
+        this.offerDraw(client);
         return;
       case "pong":
         // The connection layer watches for the traffic; there is nothing to do.
@@ -157,6 +165,10 @@ export class Lobby {
       return;
     }
 
+    // The position has moved on, so an offer made before the move no longer
+    // stands. The clients clear theirs when this `moved` reaches them.
+    room.drawOffers.clear();
+
     this.broadcast(room, {
       type: "moved",
       color,
@@ -181,6 +193,35 @@ export class Lobby {
     }
 
     const result = room.session.resign(this.colorOf(room, client.id));
+    this.broadcast(room, { type: "gameOver", ...result });
+    this.closeRoom(room);
+  }
+
+  /**
+   * Records `client`'s offer of a draw, and draws the game when the opponent
+   * has offered one as well.
+   *
+   * Both players are told who offered, so the one that did does not mistake its
+   * own offer for the opponent's. An offer only stands until a move is played,
+   * which clears both sides' offers.
+   */
+  offerDraw(client: Client): void {
+    const room = this.roomByClient.get(client.id);
+    if (!room) {
+      this.fail(client, "You are not in a game yet.");
+      return;
+    }
+
+    const color = this.colorOf(room, client.id);
+    // Offering twice is the same as offering once, so the second is ignored
+    // rather than treated as the opponent's answer.
+    if (room.drawOffers.has(color)) return;
+    room.drawOffers.add(color);
+
+    this.broadcast(room, { type: "drawOffered", color });
+
+    if (!room.drawOffers.has(invertColor(color))) return;
+    const result = room.session.draw();
     this.broadcast(room, { type: "gameOver", ...result });
     this.closeRoom(room);
   }
@@ -233,6 +274,7 @@ export class Lobby {
       session: new GameSession(complexity),
       clients: { white: white.client, black: black.client },
       names: { white: white.name, black: black.name },
+      drawOffers: new Set(),
     };
     this.rooms.set(room.id, room);
     this.roomByClient.set(white.client.id, room);

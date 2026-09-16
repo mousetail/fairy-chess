@@ -4,38 +4,10 @@ import type { ServerMessage } from "../src/online/protocol.ts";
 import { parseServerMessage } from "../src/online/protocol.ts";
 import { MatchmakingClient } from "../src/online/client.ts";
 import { resolveMatchmakingUrl } from "../src/online/config.ts";
-
-type Listener = (event: { data?: unknown }) => void;
+import { FakeSocket } from "./fake-socket.ts";
 
 /** The server a production build falls back to. */
 const PRODUCTION_URL = "wss://fairy-chess-matchmaking.mousetail.nl/ws";
-
-/** A stand-in for `WebSocket`, driven by the test instead of by a server. */
-class FakeSocket {
-  readonly sent: string[] = [];
-  closed = false;
-  private readonly listeners = new Map<string, Listener[]>();
-
-  addEventListener(type: string, listener: Listener): void {
-    this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener]);
-  }
-
-  send(data: string): void {
-    this.sent.push(data);
-  }
-
-  close(): void {
-    this.closed = true;
-    this.emit("close", {});
-  }
-
-  /** Fires everything registered for `type`, as the browser would. */
-  emit(type: string, event: { data?: unknown }): void {
-    for (const listener of [...(this.listeners.get(type) ?? [])]) {
-      listener(event);
-    }
-  }
-}
 
 /** A partial screen, for a test that wants to watch or break the messages. */
 interface ScreenStub {
@@ -122,6 +94,15 @@ test("a move is sent in the shape the server expects", () => {
     '{"type":"move","pieceId":4,"from":{"x":4,"y":1},"to":{"x":4,"y":3},' +
     '"promotion":"rook"}',
   ]);
+});
+
+test("a draw offer is sent as an offer, so it can be matched", () => {
+  const socket = new FakeSocket();
+  const { client } = clientOver(socket);
+  socket.emit("open", {});
+
+  client.offerDraw();
+  assert.deepEqual(socket.sent, ['{"type":"offerDraw"}']);
 });
 
 test("an unreachable server is reported by ready", async () => {
@@ -220,6 +201,10 @@ test("only messages with a type this build knows are accepted", () => {
   assert.equal(
     (parseServerMessage('{"type":"welcome"}') as ServerMessage).type,
     "welcome",
+  );
+  assert.equal(
+    parseServerMessage('{"type":"drawOffered","color":"white"}')?.type,
+    "drawOffered",
   );
   assert.equal(parseServerMessage('{"type":"goodbye"}'), undefined);
   // An array is an object, so it has to be turned away by hand.

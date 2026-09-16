@@ -229,6 +229,124 @@ Deno.test("resigning ends the game for both players", () => {
   assert.equal(white.last("queued")?.waiting, 1);
 });
 
+Deno.test("one player offering a draw does not end the game", () => {
+  const lobby = deterministicLobby();
+  const { white, black } = matched(
+    lobby,
+    new FakeClient("first"),
+    new FakeClient("second"),
+  );
+
+  lobby.handleMessage(white, { type: "offerDraw" });
+
+  // Both sides are told, so each can tell its own offer from the opponent's.
+  assert.deepEqual(white.last("drawOffered"), {
+    type: "drawOffered",
+    color: "white",
+  });
+  assert.deepEqual(black.last("drawOffered"), {
+    type: "drawOffered",
+    color: "white",
+  });
+  assert.equal(white.messages("gameOver").length, 0);
+  assert.equal(lobby.gameCount, 1);
+});
+
+Deno.test("the game is drawn once both players have offered one", () => {
+  const lobby = deterministicLobby();
+  const { white, black } = matched(
+    lobby,
+    new FakeClient("first"),
+    new FakeClient("second"),
+  );
+
+  lobby.handleMessage(white, { type: "offerDraw" });
+  lobby.handleMessage(black, { type: "offerDraw" });
+
+  const drawn = { type: "gameOver", status: "draw", winner: "draw" };
+  assert.deepEqual(white.last("gameOver"), drawn);
+  assert.deepEqual(black.last("gameOver"), drawn);
+  assert.equal(lobby.gameCount, 0);
+
+  // The game is over, so there is nothing left to offer a draw in.
+  lobby.handleMessage(white, { type: "offerDraw" });
+  assert.equal(white.last("error")?.message, "You are not in a game yet.");
+});
+
+Deno.test("offering twice is not the same as the opponent offering", () => {
+  const lobby = deterministicLobby();
+  const { white } = matched(
+    lobby,
+    new FakeClient("first"),
+    new FakeClient("second"),
+  );
+
+  lobby.handleMessage(white, { type: "offerDraw" });
+  lobby.handleMessage(white, { type: "offerDraw" });
+
+  assert.equal(white.messages("drawOffered").length, 1);
+  assert.equal(white.messages("gameOver").length, 0);
+  assert.equal(lobby.gameCount, 1);
+});
+
+Deno.test("a move clears a draw offer that was standing", () => {
+  const lobby = deterministicLobby();
+  const { white, black } = matched(
+    lobby,
+    new FakeClient("first"),
+    new FakeClient("second"),
+  );
+
+  lobby.handleMessage(white, { type: "offerDraw" });
+  lobby.handleMessage(white, {
+    type: "move",
+    pieceId: 4,
+    from: { x: 4, y: 1 },
+    to: { x: 4, y: 3 },
+  });
+
+  // The move took white's offer with it, so black's is a fresh one rather than
+  // an answer to it, and the game carries on.
+  lobby.handleMessage(black, { type: "offerDraw" });
+  assert.equal(black.last("gameOver"), undefined);
+  assert.equal(lobby.gameCount, 1);
+
+  // Offering again, now that the move is behind them, does draw the game.
+  lobby.handleMessage(white, { type: "offerDraw" });
+  assert.equal(white.last("gameOver")?.winner, "draw");
+  assert.equal(lobby.gameCount, 0);
+});
+
+Deno.test("a refused move leaves a standing offer alone", () => {
+  const lobby = deterministicLobby();
+  const { white, black } = matched(
+    lobby,
+    new FakeClient("first"),
+    new FakeClient("second"),
+  );
+
+  lobby.handleMessage(white, { type: "offerDraw" });
+  // Black is not to move, so this goes nowhere and clears nothing.
+  lobby.handleMessage(black, {
+    type: "move",
+    pieceId: 12,
+    from: { x: 4, y: 6 },
+    to: { x: 4, y: 4 },
+  });
+  lobby.handleMessage(black, { type: "offerDraw" });
+
+  assert.equal(black.last("gameOver")?.winner, "draw");
+});
+
+Deno.test("offering a draw without a game is reported", () => {
+  const lobby = deterministicLobby();
+  const client = new FakeClient("client");
+
+  lobby.handleMessage(client, { type: "offerDraw" });
+
+  assert.match(client.last("error")?.message ?? "", /not in a game/);
+});
+
 Deno.test("leaving mid-game hands the win to the opponent", () => {
   const lobby = deterministicLobby();
   const { white, black } = matched(
