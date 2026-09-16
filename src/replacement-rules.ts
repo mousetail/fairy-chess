@@ -210,7 +210,7 @@ export const replacementRules: ReplacementRule[] = [
     pieceTypes.jumpingPawnLeft,
     pieceTypes.jumpingPawnRight,
   ),
-  pawnSquadRule("Pawns → Torpedoes", pieceTypes.torpedo),
+  pawnDoubleRowRule("Pawns → Spears", pieceTypes.spear),
   pawnSquadRule("Pawns → Sentries", pieceTypes.sentry),
   pawnDoubleRowRule("Pawns → Pseudocheckers", pieceTypes.pseudocheckers),
 ];
@@ -275,7 +275,6 @@ function applyRules(
     );
     if (applicable.length === 0) return;
     const chosen = applicable[Math.floor(random() * applicable.length)];
-    available.splice(available.indexOf(chosen), 1);
     for (const color of colors) chosen.apply(board, color);
     spent += chosen.complexity;
   }

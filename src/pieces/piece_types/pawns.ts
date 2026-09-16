@@ -23,17 +23,17 @@ import { getPieceImageAsync } from "../utils.ts";
 const pawnPieces = {
   antipawn: {
     symbol: "d",
-    betza: "mFcfW",
+    betza: "mfFcfW",
     promotionAbility: "deny",
     promotesLikePawn: true,
     image: getPieceImageAsync("medieval", "duke"),
     value: 1,
     displayName: "Antipawn",
     description:
-      "Moves diagonally; captures straight forward. Promotes on the last rank.",
+      "Moves diagonally forward; captures straight forward. Promotes on the last rank.",
     diagram: {
       size: 5,
-      rows: [".....", ".xcx.", "..o..", ".x.x.", "....."],
+      rows: [".....", ".xcx.", "..o..", ".....", "....."],
     },
   },
   commoner: {
@@ -53,7 +53,7 @@ const pawnPieces = {
   },
   jumpingPawnLeft: {
     symbol: "j",
-    betza: "mfWmfrFcbR",
+    betza: "fWflF",
     promotionAbility: "deny",
     promotesLikePawn: true,
     mobilityRegion: { white: "a* b* c* d*", black: "e* f* g* h*" },
@@ -61,15 +61,15 @@ const pawnPieces = {
     value: 1,
     displayName: "Jumping Pawn",
     description:
-      "Moves forward or diagonally towards the centre; captures backwards any distance.",
+      "Moves and captures forward or diagonally towards the centre;",
     diagram: {
       size: 5,
-      rows: [".....", "..xx.", "..o..", "..c..", "..c.."],
+      rows: [".....", "..xx.", "..o..", ".....", "....."],
     },
   },
   jumpingPawnRight: {
     symbol: "l",
-    betza: "mfWmflFcbR",
+    betza: "fWfrF",
     promotionAbility: "deny",
     promotesLikePawn: true,
     mobilityRegion: { white: "e* f* g* h*", black: "a* b* c* d*" },
@@ -77,38 +77,38 @@ const pawnPieces = {
     value: 1,
     displayName: "Jumping Pawn",
     description:
-      "Moves forward or diagonally towards the centre; captures backwards any distance.",
+      "Moves forward or diagonally towards the centre;",
     diagram: {
       size: 5,
-      rows: [".....", ".xx..", "..o..", "..c..", "..c.."],
+      rows: [".....", ".xx..", "..o..", ".....", "....."],
     },
   },
-  torpedo: {
+  spear: {
     symbol: "t",
-    betza: "fW",
+    betza: "fmW2fW",
     promotionAbility: "deny",
     promotesLikePawn: true,
     image: getPieceImageAsync("medieval", "spear"),
     value: 1,
-    displayName: "Torpedo",
-    description: "Moves and captures one square forward.",
+    displayName: "Spear",
+    description: "Moves one or two spaces forward, captures one space forward",
     diagram: {
       size: 5,
-      rows: [".....", "..x..", "..o..", ".....", "....."],
+      rows: ["..x..", "..c..", "..o..", ".....", "....."],
     },
   },
   sentry: {
     symbol: "s",
-    betza: "mfWcsW",
+    betza: "mfWcsWbcR",
     promotionAbility: "deny",
     promotesLikePawn: true,
     image: getPieceImageAsync("medieval", "sentry"),
     value: 1,
     displayName: "Sentry",
-    description: "Moves one square forward; captures one square sideways.",
+    description: "Moves one square forward; captures one square sideways or backwards.",
     diagram: {
       size: 5,
-      rows: [".....", "..x..", ".coc.", ".....", "....."],
+      rows: [".....", "..x..", ".coc.", "..c..", "..c.."],
     },
   },
   wall: {
@@ -117,7 +117,7 @@ const pawnPieces = {
     promotionAbility: "deny",
     promotesLikePawn: true,
     image: getPieceImageAsync("medieval", "fortress"),
-    value: 1,
+    value: 2,
     displayName: "Wall",
     description: "Cannot move; captures any adjacent enemy piece.",
     diagram: {
@@ -131,7 +131,7 @@ const pawnPieces = {
     promotionAbility: "deny",
     promotesLikePawn: true,
     image: getPieceImageAsync("geometry", "circle"),
-    value: 2,
+    value: 5,
     displayName: "Pseudocheckers Tile",
     aliases: ["Checkers Tile"],
     description:

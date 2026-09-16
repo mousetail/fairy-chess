@@ -91,7 +91,7 @@ const fairyPieces = {
     symbol: "u",
     betza: "NN",
     image: getPieceImageAsync("fantasy", "unicorn"),
-    value: 5,
+    value: 9,
     displayName: "Unicorn",
     aliases: ["Nightrider"],
     description: "Slides any number of squares along a knight's line.",
@@ -112,7 +112,7 @@ const fairyPieces = {
     symbol: "y",
     betza: "mQcfF",
     image: getPieceImageAsync("fantasy", "pylon"),
-    value: 5,
+    value: 3,
     displayName: "Pylon",
     description: "Slides like a queen; captures diagonally forward.",
     diagram: {

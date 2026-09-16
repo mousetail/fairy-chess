@@ -14,7 +14,7 @@ export const VARIANT_NAME = "fairychess";
  * type. Movements that are not listed here are declared as custom pieces
  * instead. See the piece list in `Fairy-Stockfish/src/variants.ini`.
  */
-const builtInTypes: Record<string, string> = {
+export const builtInTypes: Record<string, string> = {
   fmWfceF: "pawn",
   N: "knight",
   B: "bishop",
