@@ -6,6 +6,7 @@ Pieces live in `src/pieces`, grouped by flavour:
 - `fairy.ts` — single-pattern fairy pieces (wazir, ferz, camel, …).
 - `combinations.ts` — pieces that combine two patterns (knook, bing, …).
 - `pawns.ts` — the pawn variants that replace the pawn corps.
+- `kings.ts` — the king variants that replace the king.
 
 Each file default-exports an object of `PieceType`s, and `index.ts` merges them
 all into the `pieceTypes` map that the rest of the game looks pieces up by. A
@@ -69,6 +70,10 @@ its own.
 Some rules are not part of the notation. They are flags on the `PieceType`, and
 both our move generation and the engine read them, so they cannot drift apart:
 
+- `royal` — the piece is the one its side is played around, so it may not move
+  into check. Set on the classic king and on the king variants in `kings.ts`.
+  The game never looks for the king by identity, only by this flag, and
+  `ai/variant.ts` declares the royal piece in play as the engine's king.
 - `mobilityRegion` — the squares the piece may move to, per colour, in
   Fairy-Stockfish's bitboard syntax (e.g. `a* b* c* d*` for the four left
   files). Used by the jumping pawns, which are confined to one half of the
@@ -90,6 +95,9 @@ fields, so nothing extra is needed for a piece to work as an AI opponent:
 - Otherwise the piece is emitted automatically as a custom piece
   (`customPiece1 = o:mFA`), so most new pieces need no change to `variant.ts`
   at all. Only add a `builtInTypes` entry when a matching built-in exists.
+- A `royal` piece is declared as the engine's king instead (`king = k:R3`), which
+  overrides the default king movement. Because the engine has one king per
+  variant, only one king variant can be in play at a time.
 - `mobilityRegion`, `canCastle`, `canEnPassant` and `promotesLikePawn` become
   the matching `mobilityRegion*`, `castling`, `enPassantTypes` and
   `promotionPawnTypes` options.
@@ -105,6 +113,12 @@ as long as one of them lists a free fallback.
 `src/replacement-rules.ts` lists the swaps the chaos slider may apply.
 
 - `rule(name, from, to)` swaps a single piece (respecting `maxCopiesPerPiece`).
+  Set `positionalValue` on the result when the piece is worth more in the
+  starting position than its nominal value suggests; the commoner corps adds 3
+  this way, because commoners count as much as pawns yet dominate them.
+- `kingRule(name, to)` swaps the king for a king variant. It is applied to both
+  colours at once and is only offered about a quarter of the time, so the classic
+  king still appears in most games.
 - `pawnRule(name, file, to)` swaps one specific pawn.
 - `pawnSquadRule(name, to)` converts a colour's whole pawn corps, for pieces
   that arrive as a squad rather than a single specialist.
@@ -114,6 +128,11 @@ as long as one of them lists a free fallback.
   front of it, for a piece whose copies work together when stacked.
 
 Add the new piece to `replacementRules` if it should be able to enter a game.
+
+Chaos ranges from the mirrored levels, which apply the same rule to both sides,
+to the fully random asymmetric level, which alternates the two colours and only
+lets a side take a rule that keeps the material balance near level (see
+`keepsBalance`). That is what `positionalValue` is measured against.
 
 ## 5. Test it against the engine
 

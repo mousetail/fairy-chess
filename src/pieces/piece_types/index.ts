@@ -1,6 +1,7 @@
 import classicPieces from "./classic.ts";
 import combinationPieces from "./combinations.ts";
 import fairyPieces from "./fairy.ts";
+import kingPieces from "./kings.ts";
 import pawnPieces from "./pawns.ts";
 
 import type { PieceDiagram } from "../diagram.ts";
@@ -42,6 +43,13 @@ export interface PieceType {
    */
   mobilityRegion?: { white: string; black: string };
   /**
+   * Whether this piece is royal: it is the piece its side is played around, so
+   * it may never move into check and its capture ends the game. Exactly one
+   * royal piece per colour is expected. `ai/variant.ts` declares it to the
+   * engine as the variant's king.
+   */
+  royal?: boolean;
+  /**
    * Whether this piece may castle with a rook like a king. Our move generation
    * adds the castling moves and `ai/variant.ts` enables castling for the engine.
    */
@@ -75,6 +83,7 @@ const pieceTypes = {
   ...fairyPieces,
   ...combinationPieces,
   ...pawnPieces,
+  ...kingPieces,
 } satisfies Record<string, PieceType>;
 
 export default pieceTypes;

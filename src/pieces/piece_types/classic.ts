@@ -68,6 +68,7 @@ const classicPieces = {
   king: {
     symbol: "k",
     betza: "K",
+    royal: true,
     promotionAbility: "deny",
     canCastle: true,
     image: getPieceImageAsync("classic", "king"),

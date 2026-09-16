@@ -17,6 +17,10 @@ body {
   --arrow-color: #ff8c42;
 }
 
+.footer {
+    text-align: center;
+}
+
 .row {
   display: flex;
 }

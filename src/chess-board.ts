@@ -118,7 +118,7 @@ export function isInCheck(
   board: ChessBoardState,
 ): boolean {
   const king = board.pieces.find(
-    (p) => p.type === pieceTypes.king && p.color === color,
+    (p) => p.type.royal && p.color === color,
   );
   if (!king) return false;
   return board.pieces.some((enemy) => {

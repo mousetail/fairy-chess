@@ -23,7 +23,6 @@ import { getImageFromPromise } from "./piece-images.ts";
 import { PieceDragController } from "./piece-drag-controller.ts";
 import { createPromotionDialogue } from "./promotion-dialogue.ts";
 import type { PieceType } from "../pieces/piece_types/index.ts";
-import pieceTypes from "../pieces/piece_types/index.ts";
 
 /** The pieces `mine` has that `theirs` does not, ordered from least to most valuable. */
 function surplusPieces(mine: Piece[], theirs: Piece[]): PieceType[] {
@@ -361,7 +360,7 @@ export default class ChessScreen implements Screen {
       return;
     }
     const king = this.game.state.pieces.find(
-      (i) => i.type === pieceTypes.king && i.color === color,
+      (i) => i.type.royal && i.color === color,
     );
     this.boardView.setCheckMarker(king ? king.position : null);
   }
@@ -371,7 +370,7 @@ export default class ChessScreen implements Screen {
     this.clearSelection();
     if (status === "checkmate") {
       const king = this.game.state.pieces.find(
-        (piece) => piece.type === pieceTypes.king && piece.color === color,
+        (piece) => piece.type.royal && piece.color === color,
       );
       this.boardView.setCheckmatedKing(king ? king.id : null);
     }
@@ -408,7 +407,7 @@ export default class ChessScreen implements Screen {
   private updateCheckMarkers(state: ChessBoardState): void {
     const color = state.turn;
     const king = state.pieces.find(
-      (piece) => piece.type === pieceTypes.king && piece.color === color,
+      (piece) => piece.type.royal && piece.color === color,
     );
     const inCheck = isInCheck(color, state);
     const checkmated = inCheck && !hasLegalMoves(color, state);

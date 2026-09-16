@@ -43,11 +43,22 @@ function capitalize(value: string): string {
  * promotion) is read from the piece definitions, so the engine and our own move
  * generation always agree.
  */
-export function buildVariantIni(state: ChessBoardState): string {
-  const lines = [`[${VARIANT_NAME}]`];
+export function buildVariantIni(
+  state: ChessBoardState,
+  name = VARIANT_NAME,
+): string {
+  const lines = [`[${name}]`];
   let customIndex = 1;
   for (const [type, symbol] of state.symbols) {
     const letter = symbol.toLowerCase();
+    if (type.royal) {
+      // The engine plays around a single king, so a royal piece is declared as
+      // that king rather than as a custom piece. Its movement is optional and
+      // defaults to the standard king, so the classic king carries no notation.
+      const notation = type.betza === "K" ? "" : `:${type.betza}`;
+      lines.push(`king = ${letter}${notation}`);
+      continue;
+    }
     const builtIn = builtInTypes[type.betza];
     let pieceName: string;
     if (builtIn) {
