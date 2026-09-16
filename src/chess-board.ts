@@ -78,7 +78,7 @@ export type Piece = {
   id: number;
 };
 
-function invertColor(color: "black" | "white"): "black" | "white" {
+export function invertColor(color: "black" | "white"): "black" | "white" {
   return color === "black" ? "white" : "black";
 }
 

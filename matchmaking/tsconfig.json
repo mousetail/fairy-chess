@@ -1,0 +1,27 @@
+{
+  /*
+   * The matchmaking server is a Deno program, so it is checked apart from the
+   * browser code in `../src`. Without this file an editor has no project for
+   * these sources and falls back to a default one that knows neither the Deno
+   * globals nor the import style the server uses, and reports errors for code
+   * that is perfectly valid.
+   *
+   * Everything here exists to show an editor what `deno task check` already
+   * knows. Deno builds its own type definitions into the binary, so it reads the
+   * `compilerOptions` in `deno.json` instead of this file; the README says why.
+   */
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    /* `deno` supplies the Deno namespace. `lib` and `vite/client` supply the web
+     * platform globals Deno also implements — fetch, WebSocket, Response, timers
+     * — and the module declarations the browser code in `../src` imports. */
+    "types": ["deno", "node", "vite/client"],
+    "lib": ["ES2023", "DOM"]
+  },
+  /*
+   * Only the server's own sources are roots; the game rules it imports from
+   * `../src` join the program on their own. The browser code is left to the
+   * root configuration rather than being dragged in here.
+   */
+  "include": ["**/*.ts"]
+}

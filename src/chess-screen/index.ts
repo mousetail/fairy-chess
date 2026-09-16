@@ -1,6 +1,7 @@
 import {
   cloneChessBoardState,
   hasLegalMoves,
+  invertColor,
   isInCheck,
   movementHasNoPendingPromotion,
   movementHasPendingPromotion,
@@ -17,6 +18,13 @@ import { PieceInfoBar } from "../piece-info-bar.ts";
 import { chaosLevels } from "../replacement-rules.ts";
 import type { Screen } from "../screen.ts";
 import { AiPlayer } from "../ai/ai-player.ts";
+import type { Color, MoveRejection, MoveRequest } from "../online/protocol.ts";
+import {
+  deserializeBoardState,
+  pieceTypeFromKey,
+  pieceTypeKey,
+  type SerializedBoardState,
+} from "../online/serialization.ts";
 import { ArrowsLayer } from "./arrows-layer.ts";
 import { BoardView } from "./board-view.ts";
 import { tileFromEvent } from "./board-geometry.ts";
@@ -43,13 +51,67 @@ function surplusPieces(mine: Piece[], theirs: Piece[]): PieceType[] {
   return surplus.sort((a, b) => a.value - b.value);
 }
 
+/** The piece type `key` names, or nothing when this build does not know it. */
+function knownPieceType(key: string): PieceType[] {
+  try {
+    return [pieceTypeFromKey(key)];
+  } catch {
+    return [];
+  }
+}
+
+/** A player-facing explanation of a move the server refused. */
+function rejectionText(rejection: MoveRejection): string {
+  switch (rejection.reason) {
+    case "game-over":
+      return "The game is already over.";
+    case "not-your-turn":
+      return "It is not your turn yet.";
+    case "unknown-piece":
+    case "not-your-piece":
+      return "The server does not have that piece on your side.";
+    case "stale-position":
+      return "Your board was out of date; try the move again.";
+    case "illegal-move":
+      return "The server did not allow that move.";
+    case "promotion-required":
+      return "The server needs to know what to promote to.";
+  }
+}
+
 export interface ChessScreenOptions {
   white?: Player;
   black?: Player;
   /** Index into {@link chaosLevels} describing how many fairy pieces to add. */
   chaosLevel?: number;
+  /**
+   * The position to start from, when someone other than this screen laid it
+   * out. An online game uses the one the server sent; {@link chaosLevel} then
+   * only describes how the server chose it.
+   */
+  initialBoard?: SerializedBoardState;
+  /** Names to show in the player bars, instead of the ones the players imply. */
+  playerNames?: Partial<Record<Color, string>>;
+  /** Set when the game is played against someone over the network. */
+  online?: OnlineOpponent;
   onPlayAgain?: () => void;
 }
+
+/** What an online game needs that the screen cannot work out for itself. */
+export interface OnlineOpponent {
+  /** The colour this browser plays. */
+  color: Color;
+  /** Asks the server to play a move; the board changes when it accepts. */
+  requestMove(request: MoveRequest): void;
+  /** Asks the server to end the game in the opponent's favour. */
+  resign(): void;
+}
+
+/**
+ * How a game ended. The local rules only ever reach the first two; only the
+ * server can call a game on a resignation.
+ */
+export type GameEndStatus = GameStatus | "resign";
 
 interface PlayerBar {
   element: HTMLDivElement;
@@ -93,6 +155,15 @@ export default class ChessScreen implements Screen {
   private aiError: string | null = null;
   private disposed = false;
   private plyCount = 0;
+  /** The names shown in the player bars, and logged with a finished game. */
+  private readonly playerNames: Record<Color, string>;
+  /** The opponent this browser is playing over the network, when there is one. */
+  private readonly online: OnlineOpponent | undefined;
+  /** The move this browser last asked the server to play, if any. */
+  private onlineRequest: { piece: Piece; move: SpecialMovement } | null = null;
+  /** Where a short message for the player is shown, once the screen is up. */
+  private noticeElement: HTMLParagraphElement | null = null;
+  private resignButton: HTMLButtonElement | null = null;
   /**
    * The piece types the game was set up with. A finished game credits every one
    * of them, whichever player ended up with it.
@@ -101,8 +172,16 @@ export default class ChessScreen implements Screen {
 
   constructor(options: ChessScreenOptions = {}) {
     this.options = options;
-    const chaos = chaosLevels[options.chaosLevel ?? 0] ?? chaosLevels[0];
-    this.game = ChessGame.defaultLayout(chaos);
+    this.online = options.online;
+
+    if (options.initialBoard) {
+      // Someone else laid the position out — in an online game, the server.
+      this.game = new ChessGame();
+      this.game.state = deserializeBoardState(options.initialBoard);
+    } else {
+      const chaos = chaosLevels[options.chaosLevel ?? 0] ?? chaosLevels[0];
+      this.game = ChessGame.defaultLayout(chaos);
+    }
     this.visibleState = this.game.state;
     this.piecesInPlay = [
       ...new Set(this.game.state.pieces.map((piece) => piece.type)),
@@ -110,6 +189,12 @@ export default class ChessScreen implements Screen {
     this.game.players = {
       white: options.white ?? { type: "human" },
       black: options.black ?? { type: "human" },
+    };
+    this.playerNames = {
+      white: options.playerNames?.white ??
+        this.playerLabel(this.game.players.white),
+      black: options.playerNames?.black ??
+        this.playerLabel(this.game.players.black),
     };
 
     const aiConfig = [this.game.players.white, this.game.players.black].find(
@@ -154,12 +239,8 @@ export default class ChessScreen implements Screen {
     this.playAgainButton.textContent = "Play again";
     this.scoreWidget.appendChild(this.playAgainButton);
 
-    this.blackPlayerBar = this.createPlayerBar(
-      this.playerLabel(this.game.players.black),
-    );
-    this.whitePlayerBar = this.createPlayerBar(
-      this.playerLabel(this.game.players.white),
-    );
+    this.blackPlayerBar = this.createPlayerBar(this.playerNames.black);
+    this.whitePlayerBar = this.createPlayerBar(this.playerNames.white);
     this.updateMaterialAdvantage(this.game.state);
     this.updateTurnIndicator();
   }
@@ -183,6 +264,12 @@ export default class ChessScreen implements Screen {
     const sidebar = document.createElement("div");
     sidebar.classList.add("sidebar");
     parent.appendChild(sidebar);
+
+    this.noticeElement = document.createElement("p");
+    this.noticeElement.classList.add("game-notice");
+    this.noticeElement.hidden = true;
+    sidebar.appendChild(this.noticeElement);
+
     sidebar.appendChild(this.scoreWidget);
     sidebar.appendChild(this.pieceInfoBar.element);
     this.playAgainButton.addEventListener("click", () => {
@@ -193,6 +280,17 @@ export default class ChessScreen implements Screen {
         new ChessScreen(this.options).activate(parent);
       }
     });
+
+    if (this.online) {
+      const resign = document.createElement("button");
+      resign.classList.add("resign-button");
+      resign.textContent = "Resign";
+      resign.addEventListener("click", () => {
+        resign.disabled = true;
+        this.online?.resign();
+      });
+      this.resignButton = resign;
+    }
 
     this.historyBar = new HistoryBar(
       sidebar,
@@ -211,6 +309,9 @@ export default class ChessScreen implements Screen {
       },
       () => !this.handlingPromotion,
     );
+
+    // Below the move log, so it is out of the way of the game itself.
+    if (this.resignButton) sidebar.appendChild(this.resignButton);
 
     document.addEventListener("keydown", this.onKeyDown);
     document.addEventListener("pointerdown", this.onDocumentPointerDown);
@@ -235,6 +336,18 @@ export default class ChessScreen implements Screen {
 
   canInteract(): boolean {
     return !this.gameEnded && this.historyBar?.isAtPresent() === true;
+  }
+
+  /**
+   * Whether a piece may be picked up: it belongs to a side this browser
+   * controls, and it is that side's turn to move.
+   */
+  private playable(piece: Piece): boolean {
+    if (piece.color !== this.game.state.turn) return false;
+    if (this.game.players[piece.color].type !== "human") return false;
+    // Over the network the opponent is a person too, so only the side the
+    // server gave this browser may be moved.
+    return this.online === undefined || this.online.color === piece.color;
   }
 
   /** The piece occupying a tile in the position the board is showing. */
@@ -275,14 +388,11 @@ export default class ChessScreen implements Screen {
       this.pieceInfoBar.show(piece.type);
     }
 
-    const ownHumanPiece =
-      piece !== undefined &&
-      piece.color === this.game.state.turn &&
-      this.game.players[piece.color].type === "human";
-
     // Clicking the already-selected piece again deselects it; anything else
     // (an enemy piece, or an empty square) also drops the selection.
-    if (ownHumanPiece && this.pointerDownSelectionId !== piece.id) {
+    if (piece !== undefined && this.playable(piece) &&
+      this.pointerDownSelectionId !== piece.id
+    ) {
       this.selectPiece(piece);
     } else {
       this.clearSelection();
@@ -309,11 +419,7 @@ export default class ChessScreen implements Screen {
     if (!tile) return;
 
     const piece = this.game.getPieceAt(tile);
-    if (
-      !piece ||
-      piece.color !== this.game.state.turn ||
-      this.game.players[piece.color].type !== "human"
-    ) {
+    if (!piece || !this.playable(piece)) {
       return;
     }
 
@@ -326,6 +432,23 @@ export default class ChessScreen implements Screen {
       ({ promotion: undefined } | { promotion: { state: "resolved" } }),
   ): void {
     if (!this.canInteract()) return;
+
+    if (this.online) {
+      // The server referees, so this asks rather than plays: the board changes
+      // when it answers with the position the move produced.
+      this.onlineRequest = { piece, move };
+      this.online.requestMove({
+        pieceId: piece.id,
+        from: { ...piece.position },
+        to: { ...move.to },
+        promotion: move.promotion?.state === "resolved"
+          ? pieceTypeKey(move.promotion.piece)
+          : undefined,
+      });
+      this.arrowsLayer.clear();
+      this.clearSelection();
+      return;
+    }
 
     const taggedMove = { ...move, from: piece.position, piece };
     const pgn = specialMovementToPgn(taggedMove, this.game.state);
@@ -363,7 +486,7 @@ export default class ChessScreen implements Screen {
     });
   }
 
-  setInCheck(color: "black" | "white", isInCheck: boolean): void {
+  setInCheck(color: Color, isInCheck: boolean): void {
     if (!isInCheck) {
       this.boardView.setCheckMarker(null);
       return;
@@ -374,10 +497,11 @@ export default class ChessScreen implements Screen {
     this.boardView.setCheckMarker(king ? king.position : null);
   }
 
-  setGameEnd(status: GameStatus, color: "black" | "white"): void {
+  setGameEnd(status: GameEndStatus, color: Color): void {
     if (this.gameEnded) return;
     this.gameEnded = true;
     this.clearSelection();
+    if (this.resignButton) this.resignButton.disabled = true;
     if (status === "checkmate") {
       const king = this.game.state.pieces.find(
         (piece) => piece.type.royal && piece.color === color,
@@ -394,28 +518,97 @@ export default class ChessScreen implements Screen {
   }
 
   /**
-   * Credits the finished game to the local player's discoveries. The local
-   * player is the human; when both sides are human (a local game) white is
-   * treated as the player.
+   * Shows the result the server decided. `winner` is the side that won, or
+   * `"draw"`; the rest of the screen only needs the side that lost.
    */
-  private recordDiscovery(status: GameStatus, color: "black" | "white"): void {
-    const playerColor =
-      this.game.players.white.type === "human" ? "white" : "black";
+  declareResult(status: GameEndStatus, winner: Color | "draw"): void {
+    this.setGameEnd(status, winner === "draw" ? "white" : invertColor(winner));
+  }
+
+  /**
+   * Replaces the position with the one the server sent after it accepted a
+   * move.
+   *
+   * The server is the authority, so the board is replaced rather than advanced:
+   * the opponent's moves arrive the same way, and a move this browser asked for
+   * has not happened until it comes back here.
+   */
+  applyServerMove(
+    board: SerializedBoardState,
+    pgn: string,
+    inCheck: boolean,
+  ): void {
+    const state = deserializeBoardState(board);
+    this.game.state = state;
+    this.visibleState = state;
+    this.onlineRequest = null;
+
+    this.boardView.clearPieces();
+    for (const piece of state.pieces) {
+      this.boardView.addPiece(piece);
+    }
+    if (state.lastMove) {
+      this.boardView.setHighlightedMoves(state.lastMove);
+    }
+    this.updateCheckMarkers(state, inCheck);
+    this.arrowsLayer.clear();
+    this.clearSelection();
+    this.updateMaterialAdvantage(state);
+    this.updateTurnIndicator();
+
+    this.historyBar?.addLogEntry(cloneChessBoardState(state), pgn);
+    this.plyCount++;
+  }
+
+  /**
+   * Reports a move the server would not accept. Nothing has to be undone: the
+   * board only ever shows positions the server has sent.
+   */
+  reportRejection(rejection: MoveRejection): void {
+    if (rejection.reason === "promotion-required") {
+      const request = this.onlineRequest;
+      const options = rejection.options.flatMap(knownPieceType);
+      if (request && options.length > 0) {
+        this.showPromotionOptions(request.piece, {
+          ...request.move,
+          promotion: { state: "pending", options },
+        });
+        return;
+      }
+      this.showNotice("The server did not say what to promote to.");
+    } else {
+      this.showNotice(rejectionText(rejection));
+    }
+    this.onlineRequest = null;
+  }
+
+  /** Shows a short message in the sidebar, for what the game cannot say. */
+  showNotice(text: string): void {
+    if (!this.noticeElement) return;
+    this.noticeElement.textContent = text;
+    this.noticeElement.hidden = false;
+  }
+
+  /**
+   * Credits the finished game to the local player's discoveries. The local
+   * player is the colour this browser plays: the one the server handed out in
+   * an online game, and white otherwise, since white is the side a person has
+   * in both of the local modes.
+   */
+  private recordDiscovery(status: GameEndStatus, color: Color): void {
+    const playerColor: Color = this.online?.color ??
+      (this.game.players.white.type === "human" ? "white" : "black");
     const outcome: GameOutcome =
       status === "stalemate" ? "tie" : color === playerColor ? "loss" : "win";
-    const opponentColor = playerColor === "white" ? "black" : "white";
     recordGame({
       pieces: this.piecesInPlay,
       outcome,
-      opponentName: this.playerLabel(this.game.players[opponentColor]),
+      opponentName: this.playerNames[invertColor(playerColor)],
     });
   }
 
   selectPiece(piece: Piece): void {
-    if (
-      piece.color === this.game.state.turn &&
-      this.game.players[piece.color].type === "human"
-    ) {
+    if (this.playable(piece)) {
       this.clearSelection();
       const moves = this.game.getValidMoves(piece);
       this.selectedPiece = { piece, moves };
@@ -433,12 +626,14 @@ export default class ChessScreen implements Screen {
   }
 
   /** Updates the check marker and checkmate orientation to match a state. */
-  private updateCheckMarkers(state: ChessBoardState): void {
+  private updateCheckMarkers(
+    state: ChessBoardState,
+    inCheck: boolean = isInCheck(state.turn, state),
+  ): void {
     const color = state.turn;
     const king = state.pieces.find(
       (piece) => piece.type.royal && piece.color === color,
     );
-    const inCheck = isInCheck(color, state);
     const checkmated = inCheck && !hasLegalMoves(color, state);
     this.boardView.setCheckMarker(inCheck && king ? king.position : null);
     this.boardView.setCheckmatedKing(checkmated && king ? king.id : null);

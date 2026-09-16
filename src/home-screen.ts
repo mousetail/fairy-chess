@@ -6,6 +6,7 @@ import {
   summarize,
 } from "./discoveries.ts";
 import { DiscoveriesScreen } from "./discoveries-screen.ts";
+import { MatchmakingScreen } from "./online/matchmaking-screen.ts";
 import { chaosLevels } from "./replacement-rules.ts";
 import type { Screen } from "./screen.ts";
 import pieceTypes from "./pieces/piece_types/index.ts";
@@ -28,6 +29,8 @@ export interface HomeScreenSettings {
   minTurnTime: string;
   difficulty: string;
   chaosLevel: string;
+  /** The name to show an online opponent, or an empty string for none. */
+  playerName: string;
 }
 
 export class HomeScreen implements Screen {
@@ -117,8 +120,38 @@ export class HomeScreen implements Screen {
 
     container.appendChild(aiOptions);
 
+    const onlineOptions = document.createElement("div");
+    onlineOptions.classList.add("online-options");
+    onlineOptions.hidden = true;
+
+    const onlineSubHeader = document.createElement("h2");
+    onlineSubHeader.textContent = "Online Opponent";
+    onlineOptions.appendChild(onlineSubHeader);
+
+    const nameLabel = document.createElement("label");
+    nameLabel.classList.add("player-name-input");
+    nameLabel.appendChild(document.createTextNode("Your name: "));
+    const nameInput = document.createElement("input");
+    nameInput.type = "text";
+    // The server caps a name at the same length; this only saves the round trip.
+    nameInput.maxLength = 24;
+    nameInput.placeholder = "Anonymous";
+    nameInput.value = this.initialSettings?.playerName ?? "";
+    nameLabel.appendChild(nameInput);
+    onlineOptions.appendChild(nameLabel);
+
+    const onlineHint = document.createElement("p");
+    onlineHint.classList.add("option-hint");
+    onlineHint.textContent =
+      "Shown to your opponent. The chaos level below is what you will be " +
+      "matched at, give or take one level.";
+    onlineOptions.appendChild(onlineHint);
+
+    container.appendChild(onlineOptions);
+
     const updateAiOptionsVisibility = () => {
       aiOptions.hidden = modeRadio.getValue() !== "vs AI";
+      onlineOptions.hidden = modeRadio.getValue() !== "Online";
     };
     updateAiOptionsVisibility();
     modeRadio.element.addEventListener("change", updateAiOptionsVisibility);
@@ -149,6 +182,7 @@ export class HomeScreen implements Screen {
       minTurnTime: minTurnTimeInput.value,
       difficulty: difficultySlider.getValue(),
       chaosLevel: chaosLevelSlider.getValue(),
+      playerName: nameInput.value,
     });
 
     discoveriesButton.addEventListener("click", () => {
@@ -161,16 +195,33 @@ export class HomeScreen implements Screen {
 
     playButton.addEventListener("click", () => {
       const settings = currentSettings();
+      this.deactivate();
+
+      if (settings.mode === "Online") {
+        new MatchmakingScreen({
+          complexity: this.chaosLevelIndex(settings.chaosLevel),
+          name: settings.playerName,
+          onLeave: () => new HomeScreen(settings).activate(parent),
+        }).activate(parent);
+        return;
+      }
+
       const options = this.buildOptions(
         settings.mode,
         minTurnTimeInput,
         difficultySlider.getValue(),
-        chaosLevelSlider.getValue(),
+        settings.chaosLevel,
       );
       options.onPlayAgain = () => new HomeScreen(settings).activate(parent);
-      this.deactivate();
       new ChessScreen(options).activate(parent);
     });
+  }
+
+  /** The chaos level `value` names, clamped to the levels that exist. */
+  private chaosLevelIndex(value: string): number {
+    const parsed = Number.parseInt(value, 10);
+    if (!Number.isFinite(parsed)) return 0;
+    return Math.min(chaosLevels.length - 1, Math.max(0, parsed));
   }
 
   /** Returns the index of `value` in `options`, falling back to `fallback`. */
@@ -202,10 +253,7 @@ export class HomeScreen implements Screen {
     difficultyValue: string,
     chaosLevelValue: string,
   ): ChessScreenOptions {
-    const parsedChaos = Number.parseInt(chaosLevelValue, 10);
-    const chaosLevel = Number.isFinite(parsedChaos)
-      ? Math.min(chaosLevels.length - 1, Math.max(0, parsedChaos))
-      : 0;
+    const chaosLevel = this.chaosLevelIndex(chaosLevelValue);
 
     if (mode !== "vs AI") return { chaosLevel };
 

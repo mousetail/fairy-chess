@@ -404,7 +404,8 @@ button.play-button {
   }
 }
 
-.ai-options {
+.ai-options,
+.online-options {
   border: 2px solid black;
   padding: 0.75rem;
   margin-top: 0.5rem;
@@ -419,6 +420,17 @@ button.play-button {
     font-size: 1.2rem;
     margin-bottom: 0.5rem;
   }
+}
+
+.option-hint {
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  font-style: italic;
+  opacity: 0.8;
+}
+
+.player-name-input input {
+  width: 12rem;
 }
 
 .min-turn-time input {
@@ -526,6 +538,42 @@ button.play-button {
   }
 }
 
+.resign-button {
+  width: 100%;
+  padding: 0.4rem;
+  border: 2px solid black;
+  background: white;
+  color: black;
+  font-size: 0.9rem;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background-color: var(--highlighted-square-color);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+}
+
+.game-notice {
+  padding: 0.4rem;
+  border: 2px solid black;
+  background-color: var(--light-square-color);
+  color: black;
+  font-size: 0.8rem;
+
+  &[hidden] {
+    display: none;
+  }
+
+  /* A problem the player needs to act on reads louder than a status line. */
+  &.error {
+    background-color: #f4b6b6;
+  }
+}
+
 .discovery-summary {
   max-width: 40rem;
   margin-top: 0.5rem;
@@ -596,6 +644,42 @@ button.discoveries-button {
   &.undiscovered {
     background-color: black;
   }
+}
+
+.matchmaking-panel {
+  max-width: 40rem;
+  padding: 1rem;
+
+  & h1 {
+    margin-bottom: 0.5rem;
+  }
+}
+
+.matchmaking-status,
+.matchmaking-level,
+.matchmaking-queue {
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  border: 2px solid black;
+  background-color: var(--light-square-color);
+  color: black;
+}
+
+.matchmaking-status.error,
+.matchmaking-queue.error {
+  background-color: #f4b6b6;
+}
+
+.matchmaking-queue[hidden] {
+  display: none;
+}
+
+.matchmaking-hint {
+  max-width: 32rem;
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  font-style: italic;
+  opacity: 0.8;
 }
 
 .discovery-piece {
