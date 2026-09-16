@@ -57,6 +57,29 @@ const kingPieces = {
       ],
     },
   },
+  sun: {
+    symbol: "k",
+    betza: "WFND",
+    royal: true,
+    promotionAbility: "deny",
+    // The wazir, ferz, dabbaba and knight leaps together reach every square of
+    // a 2x3 rectangle from any other, so inside its palace the Sun may jump
+    // anywhere. The region keeps it in the rectangle it starts in: the three
+    // files around the king on its back rank and the rank in front of it.
+    mobilityRegion: {
+      white: "d1 e1 f1 d2 e2 f2",
+      black: "d8 e8 f8 d7 e7 f7",
+    },
+    image: getPieceImageAsync("helios", "sun"),
+    value: 8,
+    displayName: "Sun",
+    description:
+      "Confined to the 2x3 rectangle it starts in; jumps to any square of it.",
+    diagram: {
+      size: 5,
+      rows: [".....", ".xxx.", ".xox.", ".....", "....."],
+    },
+  },
 } satisfies Record<string, PieceType>;
 
 export default kingPieces;

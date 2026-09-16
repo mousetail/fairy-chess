@@ -242,6 +242,7 @@ export const replacementRules: ReplacementRule[] = [
   rule("Queen → Pylon", pieceTypes.queen, pieceTypes.pylon),
   kingRule("King → Overlord", pieceTypes.overlord),
   kingRule("King → Paladin", pieceTypes.paladin),
+  kingRule("King → Sun", pieceTypes.sun),
   pawnRule("c-pawn → Wall", 2, pieceTypes.wall),
   pawnRule("f-pawn → Wall", 5, pieceTypes.wall),
   pawnSquadRule("Pawns → Antipawns", pieceTypes.antipawn),

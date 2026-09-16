@@ -51,23 +51,26 @@ export function buildVariantIni(
   let customIndex = 1;
   for (const [type, symbol] of state.symbols) {
     const letter = symbol.toLowerCase();
+    let pieceName: string;
     if (type.royal) {
       // The engine plays around a single king, so a royal piece is declared as
       // that king rather than as a custom piece. Its movement is optional and
       // defaults to the standard king, so the classic king carries no notation.
       const notation = type.betza === "K" ? "" : `:${type.betza}`;
       lines.push(`king = ${letter}${notation}`);
-      continue;
-    }
-    const builtIn = builtInTypes[type.betza];
-    let pieceName: string;
-    if (builtIn) {
-      lines.push(`${builtIn} = ${letter}`);
-      pieceName = capitalize(builtIn);
+      // A royal piece is the engine's king, so its mobility region is the
+      // king's rather than a custom piece's.
+      pieceName = "King";
     } else {
-      const index = customIndex++;
-      lines.push(`customPiece${index} = ${letter}:${type.betza}`);
-      pieceName = `CustomPiece${index}`;
+      const builtIn = builtInTypes[type.betza];
+      if (builtIn) {
+        lines.push(`${builtIn} = ${letter}`);
+        pieceName = capitalize(builtIn);
+      } else {
+        const index = customIndex++;
+        lines.push(`customPiece${index} = ${letter}:${type.betza}`);
+        pieceName = `CustomPiece${index}`;
+      }
     }
     if (type.mobilityRegion) {
       lines.push(
