@@ -54,6 +54,7 @@ const fairyPieces = {
     value: 3,
     displayName: "Camel",
     description: "Leaps one square then three, over other pieces.",
+    promotionAbility: "always",
     diagram: {
       size: 7,
       rows: [
@@ -119,6 +120,7 @@ const fairyPieces = {
       size: 5,
       rows: ["x.x.x", ".cxc.", "xxoxx", ".xxx.", "x.x.x"],
     },
+    promotionAbility: "always",
   },
 } satisfies Record<string, PieceType>;
 

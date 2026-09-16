@@ -85,16 +85,16 @@ const pawnPieces = {
   },
   spear: {
     symbol: "t",
-    betza: "fmW2fW",
+    betza: "fcW2fW",
     promotionAbility: "deny",
     promotesLikePawn: true,
     image: getPieceImageAsync("medieval", "spear"),
     value: 1,
     displayName: "Spear",
-    description: "Moves one or two spaces forward, captures one space forward",
+    description: "Moves one space forward, captures up to two.",
     diagram: {
       size: 5,
-      rows: ["..x..", "..c..", "..o..", ".....", "....."],
+      rows: ["..c..", "..x..", "..o..", ".....", "....."],
     },
   },
   sentry: {

@@ -525,3 +525,134 @@ button.play-button {
     color: black;
   }
 }
+
+.discovery-summary {
+  max-width: 40rem;
+  margin-top: 0.5rem;
+}
+
+button.discoveries-button {
+  background: white;
+  border: 2px solid black;
+  color: black;
+  padding: 0.5rem 1rem;
+  margin-top: 0.5rem;
+  font-size: 1rem;
+  cursor: pointer;
+
+  &:hover {
+    background-color: var(--highlighted-square-color);
+  }
+}
+
+.discoveries {
+  max-width: 48rem;
+  padding: 1rem;
+}
+
+.discovery-category {
+  margin-top: 1rem;
+
+  & h2 {
+    font-size: 1.2rem;
+  }
+}
+
+.discovery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+  gap: 0.75rem;
+  margin: 0.5rem 0 0;
+}
+
+.discovery-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  /* A fixed height so every card lines up, whatever it has to show. */
+  height: 9.5rem;
+  padding: 0.5rem;
+  overflow: hidden;
+  background-color: var(--light-square-color);
+  color: black;
+
+  /* Discovered cards open a modal describing the piece. */
+  &:not(.undiscovered) {
+    cursor: pointer;
+
+    &:hover,
+    &:focus-visible {
+      background-color: var(--highlighted-square-color);
+    }
+  }
+
+  /* Pieces the player has won with are marked with a border. */
+  &.won {
+    border: 3px solid var(--arrow-color);
+  }
+
+  /* A piece that has never been in a finished game is a plain black card. */
+  &.undiscovered {
+    background-color: black;
+  }
+}
+
+.discovery-piece {
+  width: 3rem;
+  height: 3rem;
+  object-fit: contain;
+}
+
+.discovery-name {
+  font-weight: bold;
+  text-align: center;
+}
+
+.discovery-stats {
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+.discovery-opponents {
+  font-size: 0.75rem;
+  font-style: italic;
+  text-align: center;
+  opacity: 0.8;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  overflow: auto;
+  background-color: rgb(0 0 0 / 0.6);
+  z-index: 10;
+}
+
+.piece-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 14rem;
+  padding: 0.5rem;
+  /* Matches the page background so the panel reads as the sidebar's twin. */
+  background-color: #462255;
+  border: 2px solid black;
+}
+
+.modal-close {
+  border: 2px solid black;
+  background: white;
+  color: black;
+  padding: 0.5rem;
+  font-size: 1rem;
+  cursor: pointer;
+
+  &:hover {
+    background-color: var(--highlighted-square-color);
+  }
+}

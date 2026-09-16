@@ -11,6 +11,7 @@ import {
 } from "../chess-board.ts";
 import { ChessGame, type GameStatus, type Player } from "../chess-game.ts";
 import type { Tile } from "../chess-tile.ts";
+import { recordGame, type GameOutcome } from "../discoveries.ts";
 import { HistoryBar } from "../history-bar.ts";
 import { PieceInfoBar } from "../piece-info-bar.ts";
 import { chaosLevels } from "../replacement-rules.ts";
@@ -92,12 +93,20 @@ export default class ChessScreen implements Screen {
   private aiError: string | null = null;
   private disposed = false;
   private plyCount = 0;
+  /**
+   * The piece types the game was set up with. A finished game credits every one
+   * of them, whichever player ended up with it.
+   */
+  private readonly piecesInPlay: PieceType[];
 
   constructor(options: ChessScreenOptions = {}) {
     this.options = options;
     const chaos = chaosLevels[options.chaosLevel ?? 0] ?? chaosLevels[0];
     this.game = ChessGame.defaultLayout(chaos);
     this.visibleState = this.game.state;
+    this.piecesInPlay = [
+      ...new Set(this.game.state.pieces.map((piece) => piece.type)),
+    ];
     this.game.players = {
       white: options.white ?? { type: "human" },
       black: options.black ?? { type: "human" },
@@ -366,6 +375,7 @@ export default class ChessScreen implements Screen {
   }
 
   setGameEnd(status: GameStatus, color: "black" | "white"): void {
+    if (this.gameEnded) return;
     this.gameEnded = true;
     this.clearSelection();
     if (status === "checkmate") {
@@ -380,6 +390,25 @@ export default class ChessScreen implements Screen {
     } else {
       this.scoreDisplay.textContent = color === "white" ? "0-1" : "1-0";
     }
+    this.recordDiscovery(status, color);
+  }
+
+  /**
+   * Credits the finished game to the local player's discoveries. The local
+   * player is the human; when both sides are human (a local game) white is
+   * treated as the player.
+   */
+  private recordDiscovery(status: GameStatus, color: "black" | "white"): void {
+    const playerColor =
+      this.game.players.white.type === "human" ? "white" : "black";
+    const outcome: GameOutcome =
+      status === "stalemate" ? "tie" : color === playerColor ? "loss" : "win";
+    const opponentColor = playerColor === "white" ? "black" : "white";
+    recordGame({
+      pieces: this.piecesInPlay,
+      outcome,
+      opponentName: this.playerLabel(this.game.players[opponentColor]),
+    });
   }
 
   selectPiece(piece: Piece): void {

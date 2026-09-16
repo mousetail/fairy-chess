@@ -19,7 +19,7 @@ export function getPromotionOptions(state: ChessBoardState): PieceType[] {
   );
   const candidates =
     priority.length > 0
-      ? priority
+      ? [...priority, ...inPlay.filter((type) => type.promotionAbility === "always")]
       : inPlay.filter((type) => type.promotionAbility !== "deny");
   return candidates.sort((a, b) => b.value - a.value);
 }

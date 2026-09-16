@@ -1,7 +1,16 @@
 import ChessScreen, { type ChessScreenOptions } from "./chess-screen/index.ts";
 import type { Player } from "./chess-game.ts";
+import {
+  discoverySummaryText,
+  loadDiscoveries,
+  summarize,
+} from "./discoveries.ts";
+import { DiscoveriesScreen } from "./discoveries-screen.ts";
 import { chaosLevels } from "./replacement-rules.ts";
 import type { Screen } from "./screen.ts";
+import pieceTypes from "./pieces/piece_types/index.ts";
+import kingPieces from "./pieces/piece_types/kings.ts";
+import pawnPieces from "./pieces/piece_types/pawns.ts";
 
 interface RadioGroup {
   element: HTMLDivElement;
@@ -37,6 +46,23 @@ export class HomeScreen implements Screen {
     const header = document.createElement("h1");
     header.textContent = "Fairy Chess";
     container.appendChild(header);
+
+    const description = document.createElement("p");
+    description.textContent = `Chess, but pieces are randomized with different variants. Includes ${Object.keys(pieceTypes).length + 6}
+      piece types including ${Object.keys(kingPieces).length + 1} king variants and ${Object.keys(pawnPieces).length + 1} pawn variants.`;
+    container.appendChild(description);
+
+    const discoverySummary = document.createElement("p");
+    discoverySummary.classList.add("discovery-summary");
+    discoverySummary.textContent = discoverySummaryText(
+      summarize(loadDiscoveries()),
+    );
+    container.appendChild(discoverySummary);
+
+    const discoveriesButton = document.createElement("button");
+    discoveriesButton.classList.add("discoveries-button");
+    discoveriesButton.textContent = "Discovered pieces";
+    container.appendChild(discoveriesButton);
 
     const modeSubHeader = document.createElement("h2");
     modeSubHeader.textContent = "Mode Preference";
@@ -118,13 +144,23 @@ export class HomeScreen implements Screen {
     playButton.classList.add("play-button");
     container.appendChild(playButton);
 
+    const currentSettings = (): HomeScreenSettings => ({
+      mode: modeRadio.getValue() ?? modeOptions[0],
+      minTurnTime: minTurnTimeInput.value,
+      difficulty: difficultySlider.getValue(),
+      chaosLevel: chaosLevelSlider.getValue(),
+    });
+
+    discoveriesButton.addEventListener("click", () => {
+      const settings = currentSettings();
+      this.deactivate();
+      new DiscoveriesScreen(
+        () => new HomeScreen(settings).activate(parent),
+      ).activate(parent);
+    });
+
     playButton.addEventListener("click", () => {
-      const settings: HomeScreenSettings = {
-        mode: modeRadio.getValue() ?? modeOptions[0],
-        minTurnTime: minTurnTimeInput.value,
-        difficulty: difficultySlider.getValue(),
-        chaosLevel: chaosLevelSlider.getValue(),
-      };
+      const settings = currentSettings();
       const options = this.buildOptions(
         settings.mode,
         minTurnTimeInput,

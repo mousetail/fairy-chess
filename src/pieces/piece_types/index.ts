@@ -66,8 +66,10 @@ export interface PieceType {
    * `"deny"` keeps the piece out of the promotion options altogether (for
    * example, pawns and the royal king), while `"priority"` marks the piece as
    * the only promotion target whenever it is one of the pieces in play.
+   * `"always"` marks the piece as always promotable even if a priority
+   * promotion target is already in play.
    */
-  promotionAbility?: "allow" | "deny" | "priority";
+  promotionAbility?: "allow" | "deny" | "priority" | 'always';
   /**
    * Whether the piece promotes on the far rank like a pawn. Our move generation
    * attaches the promotion options to moves that reach the far rank, and
@@ -78,7 +80,7 @@ export interface PieceType {
   value: number;
 }
 
-const pieceTypes = {
+const pieceTypes: Record<string, PieceType> = {
   ...classicPieces,
   ...fairyPieces,
   ...combinationPieces,
