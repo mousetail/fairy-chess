@@ -1,4 +1,8 @@
-import type { ChessBoardState, Piece, SpecialMovement } from "../chess-board.ts";
+import type {
+  ChessBoardState,
+  Piece,
+  SpecialMovement,
+} from "../chess-board.ts";
 import type { Tile } from "../chess-tile.ts";
 import { betzaBehavior, type Behavior } from "./betza.ts";
 import pieceTypes, { type PieceType } from "./piece_types/index.ts";
@@ -91,7 +95,11 @@ function castlingMoves(
         !candidate.hasMoved
       ) {
         let clear = true;
-        for (let between = piece.position.x + direction; between !== x; between += direction) {
+        for (
+          let between = piece.position.x + direction;
+          between !== x;
+          between += direction
+        ) {
           if (isOccupied(state, { x: between, y: row })) {
             clear = false;
             break;
@@ -104,7 +112,10 @@ function castlingMoves(
             to: { x: piece.position.x + (kingSide ? 2 : -2), y: row },
             castling: {
               piece: candidate,
-              destination: { x: piece.position.x + (kingSide ? 1 : -1), y: row },
+              destination: {
+                x: piece.position.x + (kingSide ? 1 : -1),
+                y: row,
+              },
             },
           });
         }

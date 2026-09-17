@@ -146,7 +146,7 @@ export class DiscoveriesScreen implements Screen {
     if (record.defeatedOpponents.length > 0) {
       const opponents = document.createElement("div");
       opponents.classList.add("discovery-opponents");
-      opponents.textContent = `Beat ${record.defeatedOpponents.slice(0,1).join(", ")}`;
+      opponents.textContent = `Beat ${record.defeatedOpponents.slice(0, 1).join(", ")}`;
       card.appendChild(opponents);
     }
 

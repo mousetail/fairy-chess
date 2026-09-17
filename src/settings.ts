@@ -30,7 +30,7 @@ export const defaultSettings: HomeScreenSettings = {
   minTurnTime: "1",
   difficulty: "1",
   chaosLevel: "2",
-  timeControl: "1",
+  timeControl: "3",
   playerName: "",
 };
 

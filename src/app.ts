@@ -1,6 +1,7 @@
 import { invertColor } from "./chess-board.ts";
 import ChessScreen, { type ChessScreenOptions } from "./chess-screen/index.ts";
 import { DiscoveriesScreen } from "./discoveries-screen.ts";
+import { HistoryScreen } from "./history-screen.ts";
 import { HomeScreen } from "./home-screen.ts";
 import { gameHash, gameIdFromHash } from "./online/game-link.ts";
 import type { Color } from "./online/protocol.ts";
@@ -10,7 +11,11 @@ import {
   type ReviewedGame,
 } from "./online/session.ts";
 import type { Screen } from "./screen.ts";
-import { type HomeScreenSettings, loadSettings, saveSettings } from "./settings.ts";
+import {
+  type HomeScreenSettings,
+  loadSettings,
+  saveSettings,
+} from "./settings.ts";
 
 /**
  * The application: the screen on show, and whatever outlives it.
@@ -40,12 +45,21 @@ export class App {
 
   /** Shows the home screen, where a search for an opponent can be started. */
   start(): void {
-    this.showHome();
-    // A page opened on a game's link was reloaded, or followed someone's link
-    // to it. The seat is asked for; the board replaces the home screen as soon
-    // as the server answers, and the home screen shows why when it does not.
+    if (window.location.hash === "") {
+      this.showHome();
+      return;
+    } else if (window.location.hash === "#discoveries") {
+      this.showDiscoveries();
+      return;
+    } else if (window.location.hash === "#history") {
+      this.showHistory();
+      return;
+    }
+    console.error("window.location.hash", window.location.hash);
     const gameId = gameIdFromHash(location.hash);
-    if (gameId !== null) this.matchmaking.resume(gameId);
+    if (gameId !== null) return this.matchmaking.resume(gameId);
+
+    this.showHome();
   }
 
   private show(screen: Screen): void {
@@ -55,6 +69,7 @@ export class App {
   }
 
   private showHome(): void {
+    window.location.hash = "";
     this.show(
       new HomeScreen(this.matchmaking, {
         settings: this.settings,
@@ -64,16 +79,30 @@ export class App {
         },
         onDiscoveries: () => this.showDiscoveries(),
         onLocalGame: (options) => this.showLocalGame(options),
+        onHistory: () => this.showHistory(),
       }),
     );
   }
 
   private showDiscoveries(): void {
+    window.location.hash = "discoveries";
     this.show(new DiscoveriesScreen(() => this.showHome()));
   }
 
   private showLocalGame(options: ChessScreenOptions): void {
-    this.show(new ChessScreen({ ...options, onPlayAgain: () => this.showHome() }));
+    this.show(new ChessScreen(options));
+  }
+
+  private showHistory(): void {
+    window.location.hash = "history";
+    this.show(
+      new HistoryScreen(
+        () => this.showHome(),
+        (gameId: string) => {
+          this.matchmaking.resume(gameId);
+        },
+      ),
+    );
   }
 
   /** Puts the board on screen and connects it to the game the server started. */
@@ -82,9 +111,10 @@ export class App {
     // is who: this browser shows the name it gave, or "You" when it plays
     // anonymously.
     const ownName = game.playerName.trim() || "You";
-    const playerNames: Record<Color, string> = game.color === "white"
-      ? { white: ownName, black: game.opponentName }
-      : { white: game.opponentName, black: ownName };
+    const playerNames: Record<Color, string> =
+      game.color === "white"
+        ? { white: ownName, black: game.opponentName }
+        : { white: game.opponentName, black: ownName };
 
     const screen = new ChessScreen({
       initialBoard: game.board,
@@ -99,9 +129,7 @@ export class App {
         cancelDraw: () => game.cancelDraw(),
       },
       onPlayAgain: () => {
-        // Back to the home screen, where another search can be started from the
-        // settings that are still on it. Nothing is queued here: a player who
-        // has just finished a game decides when to look for the next opponent.
+        window.location.hash = "";
         this.showHome();
       },
     });

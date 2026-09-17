@@ -34,7 +34,12 @@ class FakeClient implements Client {
 
 /** A lobby that always gives white to the player who joined first. */
 function deterministicLobby(now: () => number = () => 0): Lobby {
-  return new Lobby({ random: () => 0, now });
+  return new Lobby({
+    random: () => 0,
+    now,
+    games: new MemoryGameStore(),
+    players: new MemoryPlayerStore(),
+  });
 }
 
 function join(
@@ -99,7 +104,12 @@ Deno.test("players within one level are paired into a game", () => {
 });
 
 Deno.test("a level one apart is decided by the lobby's coin", () => {
-  const lobby = new Lobby({ random: () => 0.99, now: () => 0 });
+  const lobby = new Lobby({
+    random: () => 0.99,
+    now: () => 0,
+    games: new MemoryGameStore(),
+    players: new MemoryPlayerStore(),
+  });
   const first = new FakeClient("first");
   const second = new FakeClient("second");
 
@@ -498,7 +508,12 @@ Deno.test("offering a draw without a game is reported", () => {
 
 Deno.test("a player who disconnects keeps their seat and loses on time", () => {
   let now = 0;
-  const lobby = new Lobby({ random: () => 0, now: () => now });
+  const lobby = new Lobby({
+    random: () => 0,
+    now: () => now,
+    games: new MemoryGameStore(),
+    players: new MemoryPlayerStore(),
+  });
   const { white, black } = matched(
     lobby,
     new FakeClient("first"),
@@ -523,7 +538,12 @@ Deno.test("a player who disconnects keeps their seat and loses on time", () => {
 
 Deno.test("a player who comes back finds their clock has been running", () => {
   let now = 0;
-  const lobby = new Lobby({ random: () => 0, now: () => now });
+  const lobby = new Lobby({
+    random: () => 0,
+    now: () => now,
+    games: new MemoryGameStore(),
+    players: new MemoryPlayerStore(),
+  });
   const { white, black } = matched(
     lobby,
     new FakeClient("first"),
@@ -722,7 +742,12 @@ Deno.test("a game is stored while it runs and recorded when it finishes", async 
 
 Deno.test("a game in progress is restored and can be rejoined", async () => {
   const games = new MemoryGameStore();
-  const lobby = new Lobby({ random: () => 0, now: () => 0, games });
+  const lobby = new Lobby({
+    random: () => 0,
+    now: () => 0,
+    games,
+    players: new MemoryPlayerStore(),
+  });
   const { white } = matched(
     lobby,
     new FakeClient("first"),
@@ -739,7 +764,12 @@ Deno.test("a game in progress is restored and can be rejoined", async () => {
   await settle();
 
   // A new lobby stands in for a server that was restarted.
-  const restarted = new Lobby({ random: () => 0, now: () => 0, games });
+  const restarted = new Lobby({
+    random: () => 0,
+    now: () => 0,
+    games,
+    players: new MemoryPlayerStore(),
+  });
   await restarted.restore();
   assert.equal(restarted.gameCount, 1);
 

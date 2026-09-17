@@ -125,12 +125,12 @@ export type ClientMessage =
    * that had none learns the one it was given.
    */
   | {
-    type: "join";
-    complexity: number;
-    timeControl: number;
-    name?: string;
-    playerId?: string;
-  }
+      type: "join";
+      complexity: number;
+      timeControl: number;
+      name?: string;
+      playerId?: string;
+    }
   /**
    * Take back a seat at a game that is still running, after a reload or a lost
    * connection. The seat is the one held for `playerId`; a game nobody is

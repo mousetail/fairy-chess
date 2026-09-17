@@ -1,4 +1,8 @@
-import type { ChessBoardState, Piece, SpecialMovement } from "../chess-board.ts";
+import type {
+  ChessBoardState,
+  Piece,
+  SpecialMovement,
+} from "../chess-board.ts";
 import type { Tile } from "../chess-tile.ts";
 
 /**
@@ -233,9 +237,7 @@ function inBounds(tile: Tile): boolean {
 
 /** Rotates a white-relative direction into the given colour's frame. */
 function rotate(direction: Tile, color: "black" | "white"): Tile {
-  return color === "white"
-    ? direction
-    : { x: -direction.x, y: -direction.y };
+  return color === "white" ? direction : { x: -direction.x, y: -direction.y };
 }
 
 /**
@@ -312,7 +314,9 @@ function generateMoves(
     y: origin.y + direction.y * distance,
   });
   const occupantAt = (tile: Tile): Piece | undefined =>
-    state.pieces.find((p) => p.position.x === tile.x && p.position.y === tile.y);
+    state.pieces.find(
+      (p) => p.position.x === tile.x && p.position.y === tile.y,
+    );
   const isPassedTile = (tile: Tile): boolean =>
     !!options.enPassant &&
     !!state.lastMove?.passedTilesForEnPassant?.some(
@@ -350,7 +354,11 @@ function generateMoves(
 
   if (spec.kind === "rider") {
     if (chebyshev(direction) > 2) return;
-    for (let distance = 1; spec.limit === 0 || distance <= spec.limit; distance++) {
+    for (
+      let distance = 1;
+      spec.limit === 0 || distance <= spec.limit;
+      distance++
+    ) {
       const to = at(distance);
       if (!inBounds(to)) break;
       const occupant = occupantAt(to);
@@ -377,8 +385,7 @@ function generateMoves(
       continue;
     }
     if (spec.limit > 0) {
-      const maxDistance =
-        spec.limit === 1 ? hurdleDistance + 1 : spec.limit;
+      const maxDistance = spec.limit === 1 ? hurdleDistance + 1 : spec.limit;
       if (distance > maxDistance) break;
     }
     if (occupant) {

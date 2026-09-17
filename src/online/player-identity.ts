@@ -36,7 +36,9 @@ function browserStorage(): IdentityStore | null {
  * it is asked. A stored value that is not a usable identifier is replaced rather
  * than trusted.
  */
-export function loadPlayerId(store: IdentityStore | null = browserStorage()): string {
+export function loadPlayerId(
+  store: IdentityStore | null = browserStorage(),
+): string {
   let stored: string | null = null;
   try {
     stored = store?.getItem(STORAGE_KEY) ?? null;

@@ -131,7 +131,7 @@ export interface ChessScreenOptions {
    * still played out, but nothing is credited to this browser's discoveries.
    */
   review?: boolean;
-  onPlayAgain?: () => void;
+  onPlayAgain: () => void;
 }
 
 /** What an online game needs that the screen cannot work out for itself. */
@@ -246,7 +246,7 @@ export default class ChessScreen implements Screen {
    */
   private readonly piecesInPlay: PieceType[];
 
-  constructor(options: ChessScreenOptions = {}) {
+  constructor(options: ChessScreenOptions) {
     this.options = options;
     this.online = options.online;
     this.review = options.review ?? false;
@@ -269,10 +269,10 @@ export default class ChessScreen implements Screen {
       black: options.black ?? { type: "human" },
     };
     this.playerNames = {
-      white: options.playerNames?.white ??
-        this.playerLabel(this.game.players.white),
-      black: options.playerNames?.black ??
-        this.playerLabel(this.game.players.black),
+      white:
+        options.playerNames?.white ?? this.playerLabel(this.game.players.white),
+      black:
+        options.playerNames?.black ?? this.playerLabel(this.game.players.black),
     };
 
     const aiConfig = [this.game.players.white, this.game.players.black].find(
@@ -369,11 +369,7 @@ export default class ChessScreen implements Screen {
     parent.appendChild(this.pieceInfoBar.element);
     this.playAgainButton.addEventListener("click", () => {
       this.deactivate();
-      if (this.options.onPlayAgain) {
-        this.options.onPlayAgain();
-      } else {
-        new ChessScreen(this.options).activate(parent);
-      }
+      this.options.onPlayAgain();
     });
 
     const actions = document.createElement("div");
@@ -499,7 +495,9 @@ export default class ChessScreen implements Screen {
 
     // Clicking the already-selected piece again deselects it; anything else
     // (an enemy piece, or an empty square) also drops the selection.
-    if (piece !== undefined && this.playable(piece) &&
+    if (
+      piece !== undefined &&
+      this.playable(piece) &&
       this.pointerDownSelectionId !== piece.id
     ) {
       this.selectPiece(piece);
@@ -550,9 +548,10 @@ export default class ChessScreen implements Screen {
         pieceId: piece.id,
         from: { ...piece.position },
         to: { ...move.to },
-        promotion: move.promotion?.state === "resolved"
-          ? pieceTypeKey(move.promotion.piece)
-          : undefined,
+        promotion:
+          move.promotion?.state === "resolved"
+            ? pieceTypeKey(move.promotion.piece)
+            : undefined,
       });
       this.arrowsLayer.clear();
       this.clearSelection();
@@ -648,9 +647,8 @@ export default class ChessScreen implements Screen {
    */
   declareResult(status: GameEndStatus, winner: Color | "draw" | null): void {
     // A drawn or called-off game has no losing side to name.
-    const loser = winner === "draw" || winner === null
-      ? null
-      : invertColor(winner);
+    const loser =
+      winner === "draw" || winner === null ? null : invertColor(winner);
     this.setGameEnd(status, loser);
   }
 
@@ -820,11 +818,12 @@ export default class ChessScreen implements Screen {
   /** Shows the draw offers the server holds, as of taking a seat back. */
   private setDrawOffer(offers: Color[]): void {
     const color = this.online?.color;
-    this.drawOffer = color !== undefined && offers.includes(color)
-      ? "mine"
-      : offers.length > 0
-      ? "theirs"
-      : "none";
+    this.drawOffer =
+      color !== undefined && offers.includes(color)
+        ? "mine"
+        : offers.length > 0
+          ? "theirs"
+          : "none";
     this.renderDrawButton();
   }
 
@@ -964,10 +963,10 @@ export default class ChessScreen implements Screen {
     button.textContent = this.drawArmed
       ? "Confirm draw"
       : this.drawOffer === "mine"
-      ? "Draw offered"
-      : this.drawOffer === "theirs"
-      ? "Accept draw"
-      : "Offer draw";
+        ? "Draw offered"
+        : this.drawOffer === "theirs"
+          ? "Accept draw"
+          : "Offer draw";
   }
 
   /**
@@ -1008,8 +1007,8 @@ export default class ChessScreen implements Screen {
     button.textContent = aborting
       ? "Abort"
       : this.resignArmed
-      ? "Confirm resign"
-      : "Resign";
+        ? "Confirm resign"
+        : "Resign";
   }
 
   /** Takes a resign button that is waiting for confirmation back to its start. */
@@ -1039,13 +1038,14 @@ export default class ChessScreen implements Screen {
     // discovery however it ended.
     if (this.review) return;
     if (status === "abort") return;
-    const playerColor: Color = this.online?.color ??
+    const playerColor: Color =
+      this.online?.color ??
       (this.game.players.white.type === "human" ? "white" : "black");
     const outcome: GameOutcome = isDrawn(status)
       ? "tie"
       : loser === playerColor
-      ? "loss"
-      : "win";
+        ? "loss"
+        : "win";
     recordGame({
       pieces: this.piecesInPlay,
       outcome,
@@ -1086,12 +1086,12 @@ export default class ChessScreen implements Screen {
   private renderClocks(): void {
     const remaining = this.clockRemaining;
     if (!remaining) return;
-    const elapsed = this.clockRunning === null
-      ? 0
-      : Date.now() - this.clockSyncedAt;
+    const elapsed =
+      this.clockRunning === null ? 0 : Date.now() - this.clockSyncedAt;
 
     for (const color of ["white", "black"] as Color[]) {
-      const left = remaining[color] - (this.clockRunning === color ? elapsed : 0);
+      const left =
+        remaining[color] - (this.clockRunning === color ? elapsed : 0);
       const bar = color === "white" ? this.whitePlayerBar : this.blackPlayerBar;
       bar.clock.textContent = formatClock(left);
       bar.clock.classList.toggle("low", left <= 20_000);

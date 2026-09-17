@@ -10,7 +10,11 @@ import {
 } from "./chess-board.ts";
 import type { Tile } from "./chess-tile.ts";
 import pieceTypes, { type PieceType } from "./pieces/piece_types/index.ts";
-import { applyChaos, chaosLevels, type ChaosLevel } from "./replacement-rules.ts";
+import {
+  applyChaos,
+  chaosLevels,
+  type ChaosLevel,
+} from "./replacement-rules.ts";
 
 /**
  * Assigns each piece type a unique symbol, preferring its standard `symbol` and
@@ -65,17 +69,22 @@ export type GameStatus = "checkmate" | "stalemate" | "repetition";
  * the game leaves and returns to always produces the same key again.
  */
 function positionKey(state: ChessBoardState): string {
-  const squares = state.pieces.map((piece) => {
-    const symbol = state.symbols.get(piece.type) ?? piece.type.symbol;
-    const color = piece.color === "white" ? "w" : "b";
-    // Only a piece that could still be castled with makes its having moved part
-    // of the position, as it does in chess: shuffling a knight out and back is
-    // the same position, moving a king out and back is not.
-    const moved = piece.type.canCastle || piece.type === pieceTypes.rook
-      ? piece.hasMoved ? "-" : "+"
-      : "";
-    return `${symbol}${color}${piece.position.x}${piece.position.y}${moved}`;
-  }).sort();
+  const squares = state.pieces
+    .map((piece) => {
+      const symbol = state.symbols.get(piece.type) ?? piece.type.symbol;
+      const color = piece.color === "white" ? "w" : "b";
+      // Only a piece that could still be castled with makes its having moved part
+      // of the position, as it does in chess: shuffling a knight out and back is
+      // the same position, moving a king out and back is not.
+      const moved =
+        piece.type.canCastle || piece.type === pieceTypes.rook
+          ? piece.hasMoved
+            ? "-"
+            : "+"
+          : "";
+      return `${symbol}${color}${piece.position.x}${piece.position.y}${moved}`;
+    })
+    .sort();
   const enPassant = state.lastMove?.passedTilesForEnPassant?.length ? "e" : "-";
   return `${state.turn}${enPassant}${squares.join("")}`;
 }

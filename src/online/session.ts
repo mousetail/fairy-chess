@@ -227,9 +227,11 @@ export class MatchmakingSession {
   /** How many clocks the server says it knows, until it says. */
   private timeControlCount = timeControls.length;
   /** What the player last asked to be matched at. */
-  private request:
-    | { complexity: number; timeControl: number; name: string }
-    | null = null;
+  private request: {
+    complexity: number;
+    timeControl: number;
+    name: string;
+  } | null = null;
   /**
    * Whether a search is wanted. A socket that is still opening joins when it
    * opens, so this is what keeps a search that was called off in the meantime
@@ -659,8 +661,8 @@ export class MatchmakingSession {
   private scheduleReconnect(): void {
     if (this.reconnectTimer !== null) return;
 
-    const attempts = this.options.maxReconnectAttempts ??
-      defaultMaxReconnectAttempts;
+    const attempts =
+      this.options.maxReconnectAttempts ?? defaultMaxReconnectAttempts;
     if (this.reconnectAttempts >= attempts) {
       this.giveUpReconnecting();
       return;
@@ -835,7 +837,12 @@ class Game implements OnlineGame {
 
     switch (message.type) {
       case "moved":
-        listener.moved(message.board, message.pgn, message.inCheck, message.color);
+        listener.moved(
+          message.board,
+          message.pgn,
+          message.inCheck,
+          message.color,
+        );
         return;
       case "clock":
         listener.clock(message.white, message.black, message.running);

@@ -21,7 +21,7 @@ the notation into a `Behavior` (`(piece, state) => SpecialMovement[]`), and
 (see step 2). There is no separate hand-written behavior to keep in sync.
 
 Fairy-Stockfish supports only a subset of Betza notation; the supported features
-are listed in the *Custom pieces* section of `Fairy-Stockfish/src/variants.ini`:
+are listed in the _Custom pieces_ section of `Fairy-Stockfish/src/variants.ini`:
 
 - all base atoms (`W`, `F`, `D`, `N`, `A`, `H`, `L`/`C`, `J`/`Z`, `G`, `K`,
   `R`, `B`, `Q`),
@@ -59,7 +59,7 @@ Add an entry to the relevant object. The fields, all documented on the
 - `diagram` — the hand-drawn movement picture; see `diagram.ts` for the tile
   characters (`.` empty, `o` the piece, `x` move, `c` capture-only).
 - `promotionAbility` — `"deny"` to keep the piece out of promotion options,
-  `"priority"` to make it the *only* promotion target when it is in play.
+  `"priority"` to make it the _only_ promotion target when it is in play.
 
 Artwork is pulled from `src/images` with `getPieceImageAsync(category, name)`;
 reuse an existing image rather than adding one unless the piece really needs

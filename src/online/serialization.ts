@@ -1,8 +1,4 @@
-import type {
-  ChessBoardState,
-  Piece,
-  TaggedMove,
-} from "../chess-board.ts";
+import type { ChessBoardState, Piece, TaggedMove } from "../chess-board.ts";
 import type { Tile } from "../chess-tile.ts";
 import pieceTypes, { type PieceType } from "../pieces/piece_types/index.ts";
 

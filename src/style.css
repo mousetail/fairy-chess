@@ -54,7 +54,11 @@ body {
 }
 
 .footer {
-    text-align: center;
+  text-align: center;
+
+  & a {
+    color: white;
+  }
 }
 
 .row {
@@ -667,10 +671,16 @@ button.play-button {
   }
 }
 
-.game-actions {
+.game-actions,
+.actions {
   display: flex;
   /* The same gap as the grid, so the two buttons line up with the panels. */
   gap: var(--gap);
+
+  & button {
+    flex: 1;
+    height: 3rem;
+  }
 }
 
 .resign-button,
@@ -712,12 +722,6 @@ button.play-button {
 .text-max-width {
   max-width: 40rem;
   margin-top: 0.5rem;
-}
-
-button.discoveries-button {
-  padding: 0.5rem 1rem;
-  margin-top: 0.5rem;
-  font-size: 1rem;
 }
 
 .discoveries {
@@ -827,7 +831,6 @@ button.discoveries-button {
   font-size: 1rem;
 }
 
-
 @media (max-width: 46.75rem) {
   body {
     --square-size: calc(100cqw / 8);
@@ -851,5 +854,16 @@ button.discoveries-button {
       white-space: nowrap;
       text-overflow: ellipsis;
     }
+  }
+}
+
+.history-page-element {
+  & img {
+    width: 1rem;
+    height: 1rem;
+  }
+
+  & a {
+    color: white;
   }
 }

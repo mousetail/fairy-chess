@@ -4,6 +4,7 @@ import {
 } from "../src/online/protocol.ts";
 import { timeControlLabel, timeControls } from "../src/online/time-controls.ts";
 import { chaosLevels } from "../src/replacement-rules.ts";
+import { getHistory } from "./history.ts";
 import { type Client, Lobby } from "./lobby.ts";
 import { maxComplexity, minComplexity } from "./matchmaking.ts";
 import { parseClientMessage } from "./parse.ts";
@@ -31,23 +32,11 @@ const clockTickMs = 250;
 export interface ServerOptions {
   port?: number;
   hostname?: string;
-  /**
-   * The origins allowed to open a socket. An empty list accepts every origin,
-   * which is convenient in development and unsafe on a public host.
-   */
   allowedOrigins?: string[];
   /** How often a keepalive is sent, in milliseconds. Zero disables them. */
   heartbeatMs?: number;
-  /** The largest message accepted from a client, in UTF-16 code units. */
   maxMessageBytes?: number;
-  /**
-   * The lobby to run. A deployment builds one with its stores and restores the
-   * games in progress before handing it over; a test lets the server make its
-   * own, which keeps everything in memory.
-   */
-  lobby?: Lobby;
-  /** Overridable for tests, which want deterministic colours and settings. */
-  random?: () => number;
+  lobby: Lobby;
 }
 
 export interface RunningServer {
@@ -92,15 +81,14 @@ class Connection implements Client {
  * instance: two instances would hold two queues and could not pair players
  * waiting on the other one.
  */
-export function startServer(options: ServerOptions = {}): RunningServer {
+export function startServer(options: ServerOptions): RunningServer {
   const port = options.port ?? defaultPort;
   const hostname = options.hostname ?? "0.0.0.0";
   const allowedOrigins = options.allowedOrigins ?? [];
   const heartbeatMs = options.heartbeatMs ?? defaultHeartbeatMs;
   const maxMessageBytes = options.maxMessageBytes ?? defaultMaxMessageBytes;
-  const random = options.random;
 
-  const lobby = options.lobby ?? new Lobby(random ? { random } : {});
+  const lobby = options.lobby;
   const connections = new Set<Connection>();
 
   const upgrade = (request: Request): Response => {
@@ -153,7 +141,7 @@ export function startServer(options: ServerOptions = {}): RunningServer {
     return response;
   };
 
-  const handle = (request: Request): Response => {
+  const handle = (request: Request): Response | Promise<Response> => {
     const { pathname } = new URL(request.url);
     if (pathname === "/ws") return upgrade(request);
     if (pathname === "/" || pathname === "/health") {
@@ -164,6 +152,9 @@ export function startServer(options: ServerOptions = {}): RunningServer {
         games: lobby.gameCount,
         connections: connections.size,
       });
+    }
+    if (pathname === "/history" || pathname === "/ws/history") {
+      return getHistory(request, lobby, allowedOrigins);
     }
     return new Response("Not found", { status: 404 });
   };
@@ -191,15 +182,10 @@ export function startServer(options: ServerOptions = {}): RunningServer {
       }
     }, heartbeatMs);
     // Deno's timers hand back a numeric handle, which is what `unrefTimer`
-    // takes. The Node definitions an editor loads alongside the Deno ones, for
-    // the tests' `node:assert`, describe an object instead, so the handle is
-    // named here as the number it really is.
+    // takes.
     Deno.unrefTimer(timer as unknown as number);
   }
 
-  // The clock is the one thing the lobby cannot work out for itself: which
-  // games have run out of time is a fact about the wall clock, so it is told
-  // the time on a timer rather than on every message.
   const clockTimer = setInterval(() => lobby.tick(), clockTickMs);
   Deno.unrefTimer(clockTimer as unknown as number);
 
@@ -226,10 +212,6 @@ function welcomeMessage(): ServerMessage {
 
 /**
  * Whether a request may be upgraded.
- *
- * A request without an `Origin` is accepted either way: the check exists to
- * stop other websites from opening sockets in a visitor's browser, and clients
- * that are not browsers cannot be a visitor's browser.
  */
 function isAllowedOrigin(request: Request, allowedOrigins: string[]): boolean {
   const origin = request.headers.get("origin");
@@ -246,8 +228,8 @@ if (import.meta.main) {
  * keeps its games in memory, as it did before there was anywhere to keep them.
  */
 async function runFromEnvironment(): Promise<void> {
-  const games = await openGameStore(Deno.env.get("REDIS_URL"));
-  const players = await openPlayerStore(Deno.env.get("DATABASE_URL"));
+  const games = await openGameStore(Deno.env.get("REDIS_URL")!);
+  const players = await openPlayerStore(Deno.env.get("DATABASE_URL")!);
 
   const lobby = new Lobby({ games, players });
   if (games) {
@@ -277,29 +259,16 @@ async function runFromEnvironment(): Promise<void> {
  * are then held in memory, and the failure is logged rather than fatal.
  */
 async function openGameStore(
-  url: string | undefined,
-): Promise<GameStore | undefined> {
-  if (!url) return undefined;
-  try {
-    return await RedisGameStore.open(url);
-  } catch (error) {
-    console.error("Could not reach Redis, so games will not be stored:", error);
-    return undefined;
-  }
+  url: string,
+): Promise<GameStore> {
+  return await RedisGameStore.open(url);
 }
 
 /** The player store named by the environment, or nothing when it names none. */
 async function openPlayerStore(
-  url: string | undefined,
-): Promise<PlayerStore | undefined> {
-  if (!url) return undefined;
-  try {
-    return await PostgresPlayerStore.open(url);
-  } catch (error) {
-    throw new Error(
-      "Could not reach PostgreSQL" + error,
-    );
-  }
+  url: string,
+): Promise<PlayerStore> {
+  return await PostgresPlayerStore.open(url);
 }
 
 /** The port named by the environment, falling back to the default. */

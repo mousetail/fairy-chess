@@ -8,6 +8,7 @@ import { Lobby } from "../lobby.ts";
 import { type RunningServer, startServer } from "../main.ts";
 import { PostgresPlayerStore } from "../postgres-store.ts";
 import { RedisGameStore } from "../redis-store.ts";
+import { MemoryGameStore, MemoryPlayerStore } from "../store.ts";
 
 /** The environment value named, or `undefined` where there is no access to it. */
 function environment(name: string): string | undefined {
@@ -97,9 +98,11 @@ function startLocalServer(): { running: RunningServer; origin: string } {
     port: 0,
     hostname: "127.0.0.1",
     heartbeatMs: 0,
-    // A fixed coin, so the colours and the settings a game is played at are the
-    // same on every run.
-    random: () => 0,
+    lobby: new Lobby({
+      games: new MemoryGameStore(),
+      players: new MemoryPlayerStore(),
+      random: () => 0,
+    }),
   });
   const address = running.server.addr;
   if (address.transport !== "tcp") throw new Error("expected a TCP listener");

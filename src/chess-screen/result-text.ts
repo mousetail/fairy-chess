@@ -6,16 +6,11 @@ import type { Color } from "../online/protocol.ts";
  * server can call a game on a resignation, an agreed draw, a flag or an abort.
  */
 export type GameEndStatus =
-  | GameStatus
-  | "resign"
-  | "draw"
-  | "timeout"
-  | "abort";
+  GameStatus | "resign" | "draw" | "timeout" | "abort";
 
 /** Whether a finished game was level, however it came to be level. */
 export function isDrawn(status: GameEndStatus): boolean {
-  return status === "stalemate" || status === "draw" ||
-    status === "repetition";
+  return status === "stalemate" || status === "draw" || status === "repetition";
 }
 
 /**

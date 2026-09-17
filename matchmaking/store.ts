@@ -2,6 +2,7 @@ import type { SerializedBoardState } from "../src/online/serialization.ts";
 import type { Color, GameResult } from "../src/online/protocol.ts";
 import type { ClockRecord } from "./clock.ts";
 import type { LoggedMove } from "./pgn.ts";
+import type { GameSummary } from "./postgres-store.ts";
 
 /**
  * Where games and players are kept between connections and between runs of the
@@ -91,6 +92,8 @@ export interface PlayerStore {
    * there is no such game. This is how a game is shown again from its link.
    */
   finishedGame(id: string): Promise<FinishedGame | null>;
+
+  findGamesForPlayer(id: string): Promise<GameSummary[]>;
 }
 
 /** A game store that keeps everything in memory, for tests and for a run with none configured. */
@@ -114,7 +117,7 @@ export class MemoryGameStore implements GameStore {
   }
 }
 
-/** A player store that keeps everything in memory, for tests and for a run with none configured. */
+/** A player store that keeps everything in memory, for tests only */
 export class MemoryPlayerStore implements PlayerStore {
   readonly remembered: { id: string; name: string }[] = [];
   readonly games: FinishedGame[] = [];
@@ -133,5 +136,9 @@ export class MemoryPlayerStore implements PlayerStore {
     return Promise.resolve(
       this.games.find((game) => game.id === id) ?? null,
     );
+  }
+
+  findGamesForPlayer(_id: string): Promise<GameSummary[]> {
+    return Promise.resolve([]);
   }
 }

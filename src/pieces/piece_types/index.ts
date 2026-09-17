@@ -69,7 +69,7 @@ export interface PieceType {
    * `"always"` marks the piece as always promotable even if a priority
    * promotion target is already in play.
    */
-  promotionAbility?: "allow" | "deny" | "priority" | 'always';
+  promotionAbility?: "allow" | "deny" | "priority" | "always";
   /**
    * Whether the piece promotes on the far rank like a pawn. Our move generation
    * attaches the promotion options to moves that reach the far rank, and

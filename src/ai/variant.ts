@@ -96,7 +96,9 @@ export function buildVariantIni(
   // variants) must be listed so the engine lets them promote on the far rank.
   // The pawn is listed first when it is in play, as it is the main promotion
   // pawn.
-  const promoters = [...state.symbols].filter(([type]) => type.promotesLikePawn);
+  const promoters = [...state.symbols].filter(
+    ([type]) => type.promotesLikePawn,
+  );
   const pawn = promoters.find(([type]) => type === pieceTypes.pawn);
   const extraPromoters = promoters.filter(([type]) => type !== pieceTypes.pawn);
   if (extraPromoters.length > 0) {

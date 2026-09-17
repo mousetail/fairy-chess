@@ -70,9 +70,7 @@ function emptyRecord(): PieceRecord {
 export function isDiscovered(
   record: PieceRecord | undefined,
 ): record is PieceRecord {
-  return (
-    record !== undefined && record.wins + record.losses + record.ties > 0
-  );
+  return record !== undefined && record.wins + record.losses + record.ties > 0;
 }
 
 /** The local storage, or `null` when it is unavailable (private mode, tests). */

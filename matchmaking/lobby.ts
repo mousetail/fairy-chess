@@ -87,30 +87,21 @@ export interface LobbyOptions {
   /** The current time, overridable so a test can drive the clocks itself. */
   now?: () => number;
   /** Where the running games are kept. In memory unless a deployment says otherwise. */
-  games?: GameStore;
+  games: GameStore;
   /** Where players and finished games are kept. In memory unless a deployment says otherwise. */
-  players?: PlayerStore;
+  players: PlayerStore;
 }
 
 /** The longest name accepted from a client. */
-const maxNameLength = 24;
+const maxNameLength = 36;
 
 /**
  * How often the players are sent their clocks while one is running.
- *
- * The server is the authority on the time, so the clocks are sent again as they
- * run rather than only when they change: a client that fell behind — a
- * backgrounded tab, whose timers the browser throttles — catches up here.
  */
 const clockIntervalMs = 1000;
 
 /**
  * Pairs waiting players and runs the games they are paired into.
- *
- * A game outlives both the connection that started it and the process that is
- * running it: it is kept in the game store under a UUID, so a player who reloads
- * or a server that restarts can pick it up again. Waiting players are still held
- * in memory, so the server must run as a single instance.
  */
 export class Lobby {
   private readonly waiting = new Map<string, WaitingPlayer>();
@@ -118,8 +109,8 @@ export class Lobby {
   private readonly roomByClient = new Map<string, Room>();
   private readonly random: () => number;
   private readonly now: () => number;
-  private readonly games: GameStore;
-  private readonly players: PlayerStore;
+  public readonly games: GameStore;
+  public readonly players: PlayerStore;
   /**
    * The writes waiting to reach the game store, per game. A change is written
    * when it happens and the answer is not waited for, so the writes are chained
@@ -128,11 +119,11 @@ export class Lobby {
    */
   private readonly writes = new Map<string, Promise<void>>();
 
-  constructor(options: LobbyOptions = {}) {
+  constructor(options: LobbyOptions) {
     this.random = options.random ?? Math.random;
     this.now = options.now ?? Date.now;
-    this.games = options.games ?? new MemoryGameStore();
-    this.players = options.players ?? new MemoryPlayerStore();
+    this.games = options.games;
+    this.players = options.players;
   }
 
   /** How many players are waiting for an opponent. */
@@ -618,10 +609,6 @@ export class Lobby {
 
   /**
    * Sends a finished game to someone who asked for it by its id.
-   *
-   * The game is not in the store the running ones live in, so it comes from the
-   * recorded ones: its moves are replayed from the PGN it was stored as, and its
-   * players are named from the rows their identifiers point at.
    */
   private review(client: Client, gameId: string, playerId: string): void {
     this.players.finishedGame(gameId).then((game) => {

@@ -60,8 +60,7 @@ const pawnPieces = {
     image: getPieceImageAsync("medieval", "guardian"),
     value: 1,
     displayName: "Centrist",
-    description:
-      "Moves and captures forward or diagonally towards the centre;",
+    description: "Moves and captures forward or diagonally towards the centre;",
     diagram: {
       size: 5,
       rows: [".....", "..xx.", "..o..", ".....", "....."],
@@ -76,8 +75,7 @@ const pawnPieces = {
     image: getPieceImageAsync("medieval", "guardian"),
     value: 1,
     displayName: "Centrist",
-    description:
-      "Moves forward or diagonally towards the centre;",
+    description: "Moves forward or diagonally towards the centre;",
     diagram: {
       size: 5,
       rows: [".....", ".xx..", "..o..", ".....", "....."],
@@ -105,7 +103,8 @@ const pawnPieces = {
     image: getPieceImageAsync("medieval", "sentry"),
     value: 1,
     displayName: "Sentry",
-    description: "Moves one square forward; captures one square sideways or backwards.",
+    description:
+      "Moves one square forward; captures one square sideways or backwards.",
     diagram: {
       size: 5,
       rows: [".....", "..x..", ".coc.", ".....", "....."],
@@ -141,7 +140,7 @@ const pawnPieces = {
       rows: ["x.c.x", ".x.x.", "c.o.c", ".x.x.", "x.c.x"],
     },
   },
-  "crow": {
+  crow: {
     symbol: "c",
     betza: "mfWmfgRcbR",
     image: getPieceImageAsync("nature", "crow"),
@@ -149,7 +148,8 @@ const pawnPieces = {
     promotesLikePawn: true,
     value: 1,
     displayName: "Crow",
-    description: "Can move one space forward or jump over an piece any dinstance in front. Captures backwards",
+    description:
+      "Can move one space forward or jump over an piece any dinstance in front. Captures backwards",
     diagram: {
       size: 5,
       rows: [".x...", ".E.x.", ".o.o.", ".c.c.", ".c.c."],

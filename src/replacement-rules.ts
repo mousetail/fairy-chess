@@ -159,7 +159,9 @@ function everyOtherPawnRule(
       let parity = Math.random() < 0.5 ? 0 : 1;
       const pawns = board.pieces.filter(
         (candidate, index) =>
-          index % 2=== parity && candidate.color === color && candidate.type === pieceTypes.pawn,
+          index % 2 === parity &&
+          candidate.color === color &&
+          candidate.type === pieceTypes.pawn,
       );
       if (pawns.length === 0) return false;
       for (const pawn of pawns) pawn.type = to;

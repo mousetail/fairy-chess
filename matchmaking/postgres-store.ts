@@ -41,6 +41,15 @@ CREATE TABLE IF NOT EXISTS games (
   finished_at timestamptz NOT NULL DEFAULT now()
 )`;
 
+export interface GameSummary {
+  id: string;
+  date: string;
+  white: string;
+  black: string;
+  result: string;
+  pieces: string[];
+}
+
 export class PostgresPlayerStore implements PlayerStore {
   private readonly client: Client;
 
@@ -164,6 +173,29 @@ export class PostgresPlayerStore implements PlayerStore {
       startedAt: row.started_at.getTime(),
       finishedAt: row.finished_at.getTime(),
     };
+  }
+
+  async findGamesForPlayer(playerId: string): Promise<GameSummary[]> {
+    // id: string;
+    // date: string;
+    // white: string;
+    // black: string;
+    // result: string;
+    // pieces: string[]
+    const { rows } = await this.client.queryObject<GameSummary>`
+      SELECT
+        games.id,
+        started_at as date,
+        p1.name as black,
+        p2.name as white,
+        winner as result,
+        (select json_agg(keys) from jsonb_object_keys(symbols) AS keys) AS pieces
+      FROM games
+      LEFT JOIN players as p1 ON p1.id = white_id
+      LEFT JOIN players as p2 ON p2.id = black_id
+      WHERE white_id = ${playerId} OR black_id = ${playerId}
+    `;
+    return rows;
   }
 
   private async upsertPlayer(id: string, name: string): Promise<void> {

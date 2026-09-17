@@ -39,16 +39,28 @@ export interface HomeScreenOptions {
   onSettingsChange(settings: HomeScreenSettings): void;
   /** Shows the discoveries screen, whose Back leads here again. */
   onDiscoveries(): void;
+  /** Shows the game history screen, whose Back leads here again. */
+  onHistory(): void;
   /** Starts a game played on this machine, from the selections made. */
   onLocalGame(options: ChessScreenOptions): void;
 }
 
 async function getRandomName() {
-  const professions = (await import('./data/professions.txt?raw')).default.split('\n');
-  const adjectives = (await import('./data/adjectives.txt?raw')).default.split('\n');
-  const profession = professions[Math.floor(Math.random() * professions.length)].toLocaleLowerCase();
+  const professions = (
+    await import("./data/professions.txt?raw")
+  ).default.split("\n");
+  const adjectives = (await import("./data/adjectives.txt?raw")).default.split(
+    "\n",
+  );
+  const profession =
+    professions[
+      Math.floor(Math.random() * professions.length)
+    ].toLocaleLowerCase();
   if (profession.length < 24) {
-    const adjective = adjectives[Math.floor(Math.random() * adjectives.length)].toLocaleLowerCase();
+    const adjective =
+      adjectives[
+        Math.floor(Math.random() * adjectives.length)
+      ].toLocaleLowerCase();
     if (!profession.startsWith(adjective)) {
       return `${adjective} ${profession}`;
     } else {
@@ -87,18 +99,6 @@ export class HomeScreen implements Screen {
     description.textContent = `Chess, but pieces are randomized with different variants. Includes ${Object.keys(pieceTypes).length + 6}
       piece types including ${Object.keys(kingPieces).length + 1} king variants and ${Object.keys(pawnPieces).length + 1} pawn variants.`;
     container.appendChild(description);
-
-    const discoverySummary = document.createElement("p");
-    discoverySummary.classList.add("text-max-width");
-    discoverySummary.textContent = discoverySummaryText(
-      summarize(loadDiscoveries()),
-    );
-    container.appendChild(discoverySummary);
-
-    const discoveriesButton = document.createElement("button");
-    discoveriesButton.classList.add("button", "discoveries-button");
-    discoveriesButton.textContent = "Discovered pieces";
-    container.appendChild(discoveriesButton);
 
     const modeSubHeader = document.createElement("h2");
     modeSubHeader.textContent = "Mode Preference";
@@ -172,7 +172,7 @@ export class HomeScreen implements Screen {
     });
     nameInput.type = "text";
     // The server caps a name at the same length; this only saves the round trip.
-    nameInput.maxLength = 24;
+    nameInput.maxLength = 36;
     nameInput.value = this.options.settings.playerName;
     nameLabel.appendChild(nameInput);
     onlineOptions.appendChild(nameLabel);
@@ -224,14 +224,31 @@ export class HomeScreen implements Screen {
     playButton.classList.add("button", "play-button");
     container.appendChild(playButton);
 
-    // The search takes the Play button over rather than a page of its own: the
-    // player can keep reading their discoveries while they wait, the button says
-    // how long they have been waiting, and pressing it again gives the wait up.
-    // Only a search that failed has something extra to say, on the line below.
     const statusText = document.createElement("p");
     statusText.classList.add("online-status-text");
     statusText.hidden = true;
     container.appendChild(statusText);
+
+    const discoverySummary = document.createElement("p");
+    discoverySummary.classList.add("text-max-width");
+    discoverySummary.textContent = discoverySummaryText(
+      summarize(loadDiscoveries()),
+    );
+    container.appendChild(discoverySummary);
+
+    const actions = document.createElement("div");
+    actions.classList.add("actions");
+    container.appendChild(actions);
+
+    const discoveriesButton = document.createElement("button");
+    discoveriesButton.classList.add("button", "discoveries-button");
+    discoveriesButton.textContent = "Discovered pieces";
+    actions.appendChild(discoveriesButton);
+
+    const historyButton = document.createElement("button");
+    historyButton.classList.add("button", "history-button");
+    historyButton.textContent = "Game history";
+    actions.appendChild(historyButton);
 
     const currentSettings = (): HomeScreenSettings => ({
       mode: modeRadio.getValue() ?? modeOptions[0],
@@ -274,6 +291,11 @@ export class HomeScreen implements Screen {
       this.options.onDiscoveries();
     });
 
+    historyButton.addEventListener("click", () => {
+      report();
+      this.options.onHistory();
+    });
+
     playButton.addEventListener("click", () => {
       const settings = currentSettings();
       report();
@@ -300,6 +322,10 @@ export class HomeScreen implements Screen {
           minTurnTimeInput,
           difficultySlider.getValue(),
           settings.chaosLevel,
+          () => {
+            window.location.hash = "";
+            this.activate(parent);
+          },
         ),
       );
     });
@@ -340,10 +366,11 @@ export class HomeScreen implements Screen {
     minTurnTimeInput: HTMLInputElement,
     difficultyValue: string,
     chaosLevelValue: string,
+    onPlayAgain: () => void,
   ): ChessScreenOptions {
     const chaosLevel = this.chaosLevelIndex(chaosLevelValue);
 
-    if (mode !== "vs AI") return { chaosLevel };
+    if (mode !== "vs AI") return { chaosLevel, onPlayAgain };
 
     const seconds = Number.parseFloat(minTurnTimeInput.value);
     const minTurnTimeMs =
@@ -360,7 +387,7 @@ export class HomeScreen implements Screen {
       difficulty,
       minTurnTimeMs,
     };
-    return { black: opponent, chaosLevel };
+    return { black: opponent, chaosLevel, onPlayAgain };
   }
 
   createSlider(

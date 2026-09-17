@@ -116,9 +116,7 @@ export class FairyStockfishEngine {
         waiter.timeout = setTimeout(() => {
           this.rejectWaiter(
             waiter,
-            new Error(
-              `Fairy Stockfish did not respond within ${timeoutMs}ms`,
-            ),
+            new Error(`Fairy Stockfish did not respond within ${timeoutMs}ms`),
           );
         }, timeoutMs);
       }
