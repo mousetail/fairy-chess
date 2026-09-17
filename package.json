@@ -10,6 +10,8 @@
     "test": "node --test --experimental-strip-types tests/*.test.ts"
   },
   "devDependencies": {
+    "@db/postgres": "npm:@jsr/db__postgres@^0.19.5",
+    "@db/redis": "npm:@jsr/db__redis@^0.42.0",
     "@types/deno": "^2.7.0",
     "@types/node": "^22.20.2",
     "typescript": "~6.0.2",

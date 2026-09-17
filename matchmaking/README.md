@@ -384,5 +384,13 @@ definitions would not be reachable from a `tsconfig.json` anyway. That is why
 `deno.json` carries an explicit `strict`, which is also Deno's default: it
 states the strictness rather than silently inheriting it from the environment.
 
+The two stores import their clients as `@db/postgres` and `@db/redis`. Those are
+JSR packages, which `deno.json` names in its import map so Deno fetches them
+itself, and which the repository's `.npmrc` points npm at JSR's registry for, so
+`npm install` fetches the same packages under the same names. Both ends then see
+one API, and `tsc` can check the server the way the editor does. The packages
+sit in `devDependencies` because only a type checker needs them: the server that
+runs is given them by Deno.
+
 `deno-globals.d.ts` holds the handful of declarations `@types/deno` leaves to
 other libraries, currently just `import.meta.main`.

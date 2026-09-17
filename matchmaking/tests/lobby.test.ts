@@ -89,7 +89,11 @@ Deno.test("players within one level are paired into a game", () => {
   assert.equal(secondMatch.color, "black");
   assert.equal(firstMatch.opponentName, "Bob");
   assert.equal(secondMatch.opponentName, "Ada");
-  assert.equal(firstMatch.board.pieces.length, 32);
+  // The layout is random, so the exact pieces are not fixed, but both players
+  // are handed the same position and it is White's to start from.
+  assert.deepEqual(firstMatch.board, secondMatch.board);
+  assert.ok(firstMatch.board.pieces.length >= 32);
+  assert.equal(firstMatch.board.turn, "white");
   assert.equal(lobby.waitingCount, 0);
   assert.equal(lobby.gameCount, 1);
 });
