@@ -3,11 +3,15 @@
   "version": "0.1.0",
   "exports": "./main.ts",
   "nodeModulesDir": "none",
+  "imports": {
+    "@db/postgres": "jsr:@db/postgres@^0.19.5",
+    "@db/redis": "jsr:@db/redis@^0.42.0"
+  },
   "tasks": {
     "start": "deno run --env-file=../.env --allow-net --allow-env main.ts",
     "dev": "deno run --watch --env-file=../.env --allow-net --allow-env main.ts",
     "check": "deno check main.ts",
-    "test": "deno test --allow-net",
+    "test": "deno test --allow-net --allow-env",
     "lint": "deno lint",
     "fmt": "deno fmt"
   },

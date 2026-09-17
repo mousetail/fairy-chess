@@ -94,14 +94,27 @@ export class MatchmakingClient {
 
   /**
    * Asks to be matched at `complexity` and `timeControl`. Sending it again only
-   * updates the preference.
+   * updates the preference. `playerId` is the identifier this browser plays
+   * under, which the server records and echoes back.
    */
-  join(complexity: number, timeControl: number, name?: string): void {
-    if (name === undefined || name.trim() === "") {
-      this.send({ type: "join", complexity, timeControl });
-    } else {
-      this.send({ type: "join", complexity, timeControl, name });
-    }
+  join(
+    complexity: number,
+    timeControl: number,
+    name?: string,
+    playerId?: string,
+  ): void {
+    const message: ClientMessage = { type: "join", complexity, timeControl };
+    if (name !== undefined && name.trim() !== "") message.name = name;
+    if (playerId !== undefined) message.playerId = playerId;
+    this.send(message);
+  }
+
+  /**
+   * Asks to take back a seat at a game that is still running, which is how a
+   * reloaded page or a reconnected socket picks a game up again.
+   */
+  rejoin(gameId: string, playerId: string): void {
+    this.send({ type: "rejoin", gameId, playerId });
   }
 
   /** Leaves the queue without waiting for an opponent. */

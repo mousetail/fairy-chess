@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import type { ServerMessage } from "../../src/online/protocol.ts";
 import { type Client, Lobby, sanitizeName } from "../lobby.ts";
+import { MemoryGameStore, MemoryPlayerStore } from "../store.ts";
 
 /** A client that keeps everything the lobby sends it. */
 class FakeClient implements Client {
@@ -42,8 +43,15 @@ function join(
   complexity: number,
   name?: string,
   timeControl = 0,
+  playerId?: string,
 ): void {
-  lobby.handleMessage(client, { type: "join", complexity, timeControl, name });
+  lobby.handleMessage(client, {
+    type: "join",
+    complexity,
+    timeControl,
+    name,
+    playerId,
+  });
 }
 
 /** Joins `first` and `second` with matching preferences and returns the match. */
@@ -484,8 +492,9 @@ Deno.test("offering a draw without a game is reported", () => {
   assert.match(client.last("error")?.message ?? "", /not in a game/);
 });
 
-Deno.test("leaving mid-game hands the win to the opponent", () => {
-  const lobby = deterministicLobby();
+Deno.test("a player who disconnects keeps their seat and loses on time", () => {
+  let now = 0;
+  const lobby = new Lobby({ random: () => 0, now: () => now });
   const { white, black } = matched(
     lobby,
     new FakeClient("first"),
@@ -493,12 +502,196 @@ Deno.test("leaving mid-game hands the win to the opponent", () => {
   );
 
   lobby.disconnect(white);
-
-  assert.deepEqual(black.last("opponentLeft"), {
-    type: "opponentLeft",
-    winner: "black",
+  assert.deepEqual(black.last("opponentAway"), {
+    type: "opponentAway",
+    color: "white",
   });
+  assert.equal(lobby.gameCount, 1, "the game outlives the connection");
+
+  // The clock is what the game runs on now: white had not moved, but going
+  // away ends their free first move, so their clock is what the game waits on.
+  now = 62_000;
+  lobby.tick(now);
+  assert.equal(black.last("gameOver")?.status, "timeout");
+  assert.equal(black.last("gameOver")?.winner, "black");
   assert.equal(lobby.gameCount, 0);
+});
+
+Deno.test("a player who comes back finds their clock has been running", () => {
+  let now = 0;
+  const lobby = new Lobby({ random: () => 0, now: () => now });
+  const { white, black } = matched(
+    lobby,
+    new FakeClient("first"),
+    new FakeClient("second"),
+  );
+  const match = white.last("matched")!;
+
+  lobby.disconnect(white);
+  now = 5_000;
+  const returning = new FakeClient("returning");
+  lobby.handleMessage(returning, {
+    type: "rejoin",
+    gameId: match.gameId,
+    playerId: match.playerId,
+  });
+
+  assert.equal(returning.last("resumed")?.color, "white");
+  assert.deepEqual(black.last("opponentBack"), {
+    type: "opponentBack",
+    color: "white",
+  });
+  // Five seconds went by while they were away, and the clock did not wait.
+  assert.equal(returning.last("resumed")?.clock.white, 55_000);
+});
+
+Deno.test("a rejoin with the wrong identifier is refused", () => {
+  const lobby = deterministicLobby();
+  const { white } = matched(
+    lobby,
+    new FakeClient("first"),
+    new FakeClient("second"),
+  );
+  const match = white.last("matched")!;
+  const stranger = new FakeClient("stranger");
+
+  lobby.handleMessage(stranger, {
+    type: "rejoin",
+    gameId: match.gameId,
+    playerId: "not-a-seat",
+  });
+  assert.match(stranger.last("error")?.message ?? "", /not a player/);
+  assert.equal(stranger.last("resumed"), undefined);
+
+  const elsewhere = new FakeClient("elsewhere");
+  lobby.handleMessage(elsewhere, {
+    type: "rejoin",
+    gameId: "no-such-game",
+    playerId: match.playerId,
+  });
+  assert.match(elsewhere.last("error")?.message ?? "", /no longer running/);
+});
+
+Deno.test("a rejoin takes over a seat an older connection still holds", () => {
+  const lobby = deterministicLobby();
+  const first = new FakeClient("first");
+  const second = new FakeClient("second");
+  join(lobby, first, 0, "Ada", 0, "player-one");
+  join(lobby, second, 0, "Bob", 0, "player-two");
+  const match = first.last("matched")!;
+
+  const again = new FakeClient("again");
+  lobby.handleMessage(again, {
+    type: "rejoin",
+    gameId: match.gameId,
+    playerId: match.playerId,
+  });
+
+  assert.equal(again.last("resumed")?.color, match.color);
+  assert.match(first.last("error")?.message ?? "", /taken over/);
+});
+
+Deno.test("neither player is told the other's identifier", () => {
+  const lobby = deterministicLobby();
+  const first = new FakeClient("first");
+  const second = new FakeClient("second");
+  join(lobby, first, 0, "Ada", 0, "player-one");
+  join(lobby, second, 0, "Bob", 0, "player-two");
+
+  const firstMatch = first.last("matched")!;
+  const secondMatch = second.last("matched")!;
+  assert.equal(firstMatch.playerId, "player-one");
+  assert.equal(secondMatch.playerId, "player-two");
+  // A client never sees the identifier that belongs to the other player.
+  assert.equal(JSON.stringify(firstMatch).includes("player-two"), false);
+  assert.equal(JSON.stringify(secondMatch).includes("player-one"), false);
+});
+
+/** Lets the lobby's fire-and-forget writes to the store finish. */
+function settle(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+Deno.test("a game is stored while it runs and recorded when it finishes", async () => {
+  const games = new MemoryGameStore();
+  const players = new MemoryPlayerStore();
+  const lobby = new Lobby({ random: () => 0, now: () => 0, games, players });
+  const { white, black } = matched(
+    lobby,
+    new FakeClient("first"),
+    new FakeClient("second"),
+  );
+  await settle();
+
+  // The game is in the store as soon as it starts, under its UUID.
+  const stored = await games.loadAll();
+  assert.equal(stored.length, 1);
+  assert.equal(stored[0].id, white.last("matched")!.gameId);
+  assert.equal(stored[0].result, null);
+
+  lobby.handleMessage(white, {
+    type: "move",
+    pieceId: 4,
+    from: { x: 4, y: 1 },
+    to: { x: 4, y: 3 },
+  });
+  await settle();
+  assert.equal((await games.loadAll())[0].moves[0].pgn, "e4");
+
+  lobby.handleMessage(black, { type: "resign" });
+  await settle();
+  // A finished game leaves the active store and is written down for good.
+  assert.equal((await games.loadAll()).length, 0);
+  assert.equal(players.games.length, 1);
+  assert.equal(players.games[0].result.status, "resign");
+  assert.equal(players.games[0].result.winner, "white");
+  assert.equal(players.games[0].pgn, "1. e4");
+  // The position the game started from is kept, so the moves can be replayed.
+  assert.match(players.games[0].initialFen, /^[rnbqkpRNBQKP1-8\/]+ w /);
+  assert.ok(Object.keys(players.games[0].symbols).length > 0);
+});
+
+Deno.test("a game in progress is restored and can be rejoined", async () => {
+  const games = new MemoryGameStore();
+  const lobby = new Lobby({ random: () => 0, now: () => 0, games });
+  const { white } = matched(
+    lobby,
+    new FakeClient("first"),
+    new FakeClient("second"),
+  );
+  const match = white.last("matched")!;
+
+  lobby.handleMessage(white, {
+    type: "move",
+    pieceId: 4,
+    from: { x: 4, y: 1 },
+    to: { x: 4, y: 3 },
+  });
+  await settle();
+
+  // A new lobby stands in for a server that was restarted.
+  const restarted = new Lobby({ random: () => 0, now: () => 0, games });
+  await restarted.restore();
+  assert.equal(restarted.gameCount, 1);
+
+  const returning = new FakeClient("returning");
+  restarted.handleMessage(returning, {
+    type: "rejoin",
+    gameId: match.gameId,
+    playerId: match.playerId,
+  });
+  const resumed = returning.last("resumed");
+  assert.ok(resumed, "the game should be picked up again");
+  // Nobody is connected to a restored game, so the side to move is on the
+  // clock: the game ends on time if neither player comes back.
+  assert.deepEqual(resumed.clock, {
+    white: 62_000,
+    black: 60_000,
+    running: "black",
+  });
+  assert.equal(resumed.board.turn, "black");
+  assert.deepEqual(resumed.drawOffers, []);
+  assert.equal((await games.loadAll())[0].seats.black.name, "Anonymous");
 });
 
 Deno.test("leaving the queue drops the player without telling anyone", () => {

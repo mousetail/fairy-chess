@@ -1,12 +1,14 @@
 import { chaosLevels } from "../replacement-rules.ts";
 import { MatchmakingClient, type SocketFactory } from "./client.ts";
 import { matchmakingUrl } from "./config.ts";
+import { loadPlayerId, savePlayerId } from "./player-identity.ts";
 import {
-  PROTOCOL_VERSION,
+  type ClockState,
   type Color,
   type GameOverStatus,
   type MoveRejection,
   type MoveRequest,
+  PROTOCOL_VERSION,
   type ServerMessage,
   type TimeControlSpec,
 } from "./protocol.ts";
@@ -58,20 +60,39 @@ export interface GameListener {
   moveRejected(rejection: MoveRejection): void;
   /** The game ended. */
   gameOver(status: GameOverStatus, winner: Color | "draw" | null): void;
-  /** The opponent's connection dropped, so this browser wins. */
-  opponentLeft(winner: Color): void;
+  /**
+   * The opponent's connection dropped. The game is not over: their clock runs
+   * on, and this browser can wait for them to come back.
+   */
+  opponentAway(color: Color): void;
+  /** The opponent came back and is playing again. */
+  opponentBack(color: Color): void;
   /** Someone offered a draw, naming the side that offered. */
   drawOffered(color: Color): void;
   /** Someone took their draw offer back, naming the side that did. */
   drawCancelled(color: Color): void;
   /** Something the server said that the board should show as a message. */
   notice(text: string): void;
-  /** The connection dropped, so the game can go no further. */
+  /** This browser lost its connection and is trying to take its seat back. */
+  resuming(attempt: number): void;
+  /**
+   * The connection is back and the seat was taken: the board is replaced with
+   * the game the server is holding, which is where the game carried on while
+   * this browser was away.
+   */
+  resumed(
+    board: SerializedBoardState,
+    clock: ClockState,
+    drawOffers: Color[],
+  ): void;
+  /** The connection dropped and could not be restored. */
   disconnected(): void;
 }
 
 /** A game in progress, as the app and the board see it. */
 export interface OnlineGame {
+  /** The UUID the game is known by, which names it in the address bar. */
+  readonly gameId: string;
   /** The colour this browser plays. */
   readonly color: Color;
   /** The name this browser asked to be shown as, possibly empty. */
@@ -83,8 +104,12 @@ export interface OnlineGame {
   readonly complexityLabel: string;
   /** The clocks the server picked for this game. */
   readonly timeControl: TimeControlSpec;
-  /** The starting position, as the server laid it out. */
+  /** The position to start from: the server laid it out, or held it until now. */
   readonly board: SerializedBoardState;
+  /** What each clock had left when the game was handed over. */
+  readonly clock: ClockState;
+  /** The sides with a draw offer standing at hand-over, if any. */
+  readonly drawOffers: Color[];
   /**
    * Registers the screen showing this game, which hears about everything that
    * happens from here on. Nothing can arrive in between: a game only starts
@@ -128,7 +153,22 @@ export interface MatchmakingSessionOptions {
   url?: string;
   /** How sockets are made; overridable so tests need no server. */
   createSocket?: SocketFactory;
+  /**
+   * The identifier this browser plays under. Read from local storage unless a
+   * test hands one in, so a game can be rejoined without a browser.
+   */
+  playerId?: string;
+  /** How long to wait between attempts to take a seat back. */
+  reconnectDelayMs?: number;
+  /** How many times to try before giving the game up. */
+  maxReconnectAttempts?: number;
 }
+
+/** How long a broken connection waits before trying to take its seat back. */
+const defaultReconnectDelayMs = 3000;
+
+/** How many times a broken connection tries before the game is left alone. */
+const defaultMaxReconnectAttempts = 40;
 
 export class MatchmakingSession {
   private readonly options: MatchmakingSessionOptions;
@@ -136,6 +176,16 @@ export class MatchmakingSession {
   private currentStatus: MatchmakingStatus = { state: "idle" };
   private client: MatchmakingClient | null = null;
   private game: Game | null = null;
+  /** The identifier this browser plays under, kept in local storage. */
+  private playerId: string;
+  /**
+   * The game this session belongs to, whether it is being played or is being
+   * taken back. It is what a reconnecting socket asks to rejoin, and what a
+   * reloaded page reads from the address bar.
+   */
+  private gameId: string | null = null;
+  private reconnectAttempts = 0;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   /** The level labels, until the server says which ones it knows. */
   private labels: string[] = chaosLevels.map((level) => level.label);
   private minComplexity = 0;
@@ -161,6 +211,7 @@ export class MatchmakingSession {
 
   constructor(options: MatchmakingSessionOptions) {
     this.options = options;
+    this.playerId = options.playerId ?? loadPlayerId();
   }
 
   get status(): MatchmakingStatus {
@@ -230,7 +281,12 @@ export class MatchmakingSession {
     // A socket that is still opening joins when it opens instead, so the join
     // always follows whatever the player did before it.
     if (client.isOpen) {
-      client.join(this.request.complexity, this.request.timeControl, name);
+      client.join(
+        this.request.complexity,
+        this.request.timeControl,
+        name,
+        this.playerId,
+      );
     }
   }
 
@@ -245,14 +301,26 @@ export class MatchmakingSession {
     this.setStatus({ state: "idle" });
   }
 
+  /**
+   * Takes back the seat this browser holds at the game named by `gameId`, which
+   * is how a page that was reloaded picks up the game it was playing. The game
+   * is put on screen as soon as the server answers.
+   */
+  resume(gameId: string): void {
+    if (this.gameId !== null || this.game !== null) return;
+    this.gameId = gameId;
+    this.searching = false;
+    this.beganAt = null;
+    this.setStatus({ state: "connecting" });
+    this.connect();
+  }
+
   private connect(): void {
     // Where to connect is a deployment's decision. A build that was not given
     // one says so, rather than opening a socket to an address nobody chose.
     const url = this.options.url ?? matchmakingUrl;
     if (url === undefined) {
-      this.fail(
-        "Matchmaking URL not configured.",
-      );
+      this.fail("Matchmaking URL not configured.");
       return;
     }
 
@@ -269,16 +337,34 @@ export class MatchmakingSession {
     client.ready.catch((error: unknown) => {
       if (this.client !== client) return;
       this.client = null;
+      // A game this browser still belongs to is worth trying again; a search
+      // that never reached the server is simply reported.
+      if (this.gameId !== null) {
+        this.scheduleReconnect();
+        return;
+      }
       this.setStatus({ state: "error", message: describe(error) });
     });
   }
 
-  /** Joins the queue on a socket that has just opened, if it is still wanted. */
+  /**
+   * Joins the queue on a socket that has just opened, or takes back the seat at
+   * a game this session still belongs to, if either is still wanted.
+   */
   private joinNow(client: MatchmakingClient): void {
     if (this.client !== client) return;
+    if (this.gameId !== null) {
+      client.rejoin(this.gameId, this.playerId);
+      return;
+    }
     const request = this.request;
     if (!this.searching || !request) return;
-    client.join(request.complexity, request.timeControl, request.name);
+    client.join(
+      request.complexity,
+      request.timeControl,
+      request.name,
+      this.playerId,
+    );
   }
 
   private receive(message: ServerMessage): void {
@@ -295,25 +381,33 @@ export class MatchmakingSession {
       case "matched":
         this.startGame(message);
         return;
+      case "resumed":
+        this.resumeGame(message);
+        return;
       case "ping":
         // The keepalive is answered by the client, not by the session.
         return;
       case "error":
         // During a game the board is the only thing on screen, so the message
-        // belongs there; otherwise it ends the search.
+        // belongs there; a rejoin that was refused ends the attempt.
         if (this.game) {
           this.game.notice(message.message);
+          return;
+        }
+        if (this.gameId !== null) {
+          this.fail(message.message);
           return;
         }
         this.setStatus({ state: "error", message: message.message });
         return;
       case "gameOver":
-      case "opponentLeft":
-        // The game is over, so the session forgets it. The screen keeps its own
-        // reference until the player asks for another opponent.
         this.game?.receive(message);
         this.game = null;
+        this.gameId = null;
+        this.cancelReconnect();
         return;
+      case "opponentAway":
+      case "opponentBack":
       case "moved":
       case "clock":
       case "moveRejected":
@@ -358,8 +452,12 @@ export class MatchmakingSession {
   private startGame(
     message: Extract<ServerMessage, { type: "matched" }>,
   ): void {
+    this.adoptPlayerId(message.playerId);
+    this.gameId = message.gameId;
+
     const game = new Game(
       {
+        gameId: message.gameId,
         color: message.color,
         playerName: this.request?.name ?? "",
         opponentName: message.opponentName,
@@ -367,14 +465,14 @@ export class MatchmakingSession {
         complexityLabel: message.complexityLabel,
         timeControl: message.timeControl,
         board: message.board,
+        clock: {
+          white: message.timeControl.initialMs,
+          black: message.timeControl.initialMs,
+          running: null,
+        },
+        drawOffers: [],
       },
-      {
-        move: (request) => this.client?.move(request),
-        resign: () => this.client?.resign(),
-        abort: () => this.client?.abort(),
-        offerDraw: () => this.client?.offerDraw(),
-        cancelDraw: () => this.client?.cancelDraw(),
-      },
+      this.sender(),
     );
 
     this.game = game;
@@ -383,15 +481,84 @@ export class MatchmakingSession {
     this.options.onGame(game);
   }
 
+  /**
+   * Takes back a seat, either for a page that has just loaded or for a socket
+   * that has just reconnected. A board already on screen is told the position
+   * the server is holding; otherwise the game is handed over as a new one.
+   */
+  private resumeGame(
+    message: Extract<ServerMessage, { type: "resumed" }>,
+  ): void {
+    this.adoptPlayerId(message.playerId);
+    this.gameId = message.gameId;
+    this.reconnectAttempts = 0;
+    this.cancelReconnect();
+    this.searching = false;
+
+    const existing = this.game;
+    if (existing) {
+      existing.applyResume(message.board, message.clock, message.drawOffers);
+      this.setStatus({ state: "idle" });
+      return;
+    }
+
+    const game = new Game(
+      {
+        gameId: message.gameId,
+        color: message.color,
+        playerName: message.playerName,
+        opponentName: message.opponentName,
+        complexity: message.complexity,
+        complexityLabel: message.complexityLabel,
+        timeControl: message.timeControl,
+        board: message.board,
+        clock: message.clock,
+        drawOffers: message.drawOffers,
+      },
+      this.sender(),
+    );
+
+    this.game = game;
+    this.setStatus({ state: "idle" });
+    this.options.onGame(game);
+  }
+
+  /** Everything the game sends on this browser's behalf. */
+  private sender(): GameSender {
+    return {
+      move: (request) => this.client?.move(request),
+      resign: () => this.client?.resign(),
+      abort: () => this.client?.abort(),
+      offerDraw: () => this.client?.offerDraw(),
+      cancelDraw: () => this.client?.cancelDraw(),
+    };
+  }
+
+  /** Keeps the identifier the server answered with, in case it made a new one. */
+  private adoptPlayerId(playerId: string): void {
+    if (playerId === this.playerId) return;
+    this.playerId = playerId;
+    savePlayerId(playerId);
+  }
+
   /** Gives up on the connection, reporting why where the player can see it. */
   private fail(message: string): void {
     this.client?.dispose();
     this.client = null;
+    this.cancelReconnect();
+    this.gameId = null;
     this.setStatus({ state: "error", message });
   }
 
   private receiveClose(): void {
     this.client = null;
+
+    // A game this browser belongs to outlives the socket: the server keeps the
+    // seat, so the connection is opened again and the seat taken back.
+    if (this.gameId !== null) {
+      this.scheduleReconnect();
+      return;
+    }
 
     const game = this.game;
     this.game = null;
@@ -410,6 +577,55 @@ export class MatchmakingSession {
         message: "The connection to the matchmaking server was lost.",
       });
     }
+  }
+
+  /**
+   * Arranges another attempt at taking the seat back, telling the board so it
+   * can say what is happening. Running out of attempts ends the game here: the
+   * seat is still held on the server, so reloading the page can still find it.
+   */
+  private scheduleReconnect(): void {
+    if (this.reconnectTimer !== null) return;
+
+    const attempts = this.options.maxReconnectAttempts ??
+      defaultMaxReconnectAttempts;
+    if (this.reconnectAttempts >= attempts) {
+      this.giveUpReconnecting();
+      return;
+    }
+
+    this.reconnectAttempts++;
+    this.game?.resuming(this.reconnectAttempts);
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      if (this.client === null) this.connect();
+    }, this.options.reconnectDelayMs ?? defaultReconnectDelayMs);
+  }
+
+  private cancelReconnect(): void {
+    if (this.reconnectTimer === null) return;
+    clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = null;
+  }
+
+  private giveUpReconnecting(): void {
+    this.cancelReconnect();
+    this.reconnectAttempts = 0;
+    const game = this.game;
+    this.game = null;
+    this.gameId = null;
+    if (game) {
+      // The board is on screen, so it is told the game can go no further.
+      game.disconnected();
+      this.setStatus({ state: "idle" });
+      return;
+    }
+    // Nothing was on screen: the page was trying to take a seat back when it
+    // loaded, and the server could not be reached.
+    this.setStatus({
+      state: "error",
+      message: "The connection to the matchmaking server was lost.",
+    });
   }
 
   private setStatus(status: MatchmakingStatus): void {
@@ -431,6 +647,7 @@ export class MatchmakingSession {
 
 /** One game, and the connection it is played over. */
 class Game implements OnlineGame {
+  readonly gameId: string;
   readonly color: Color;
   readonly playerName: string;
   readonly opponentName: string;
@@ -441,9 +658,12 @@ class Game implements OnlineGame {
 
   private readonly sender: GameSender;
   private listener: GameListener | null = null;
+  private clockState: ClockState;
+  private offeredDraws: Color[];
 
   constructor(
     init: {
+      gameId: string;
       color: Color;
       playerName: string;
       opponentName: string;
@@ -451,9 +671,12 @@ class Game implements OnlineGame {
       complexityLabel: string;
       timeControl: TimeControlSpec;
       board: SerializedBoardState;
+      clock: ClockState;
+      drawOffers: Color[];
     },
     sender: GameSender,
   ) {
+    this.gameId = init.gameId;
     this.color = init.color;
     this.playerName = init.playerName;
     this.opponentName = init.opponentName;
@@ -461,7 +684,19 @@ class Game implements OnlineGame {
     this.complexityLabel = init.complexityLabel;
     this.timeControl = init.timeControl;
     this.board = init.board;
+    this.clockState = init.clock;
+    this.offeredDraws = [...init.drawOffers];
     this.sender = sender;
+  }
+
+  /** What each clock had left when the game was last taken back. */
+  get clock(): ClockState {
+    return this.clockState;
+  }
+
+  /** The sides with a draw offer standing at hand-over. */
+  get drawOffers(): Color[] {
+    return this.offeredDraws;
   }
 
   listen(listener: GameListener): void {
@@ -488,6 +723,25 @@ class Game implements OnlineGame {
     this.sender.cancelDraw();
   }
 
+  /**
+   * Reports that the seat was taken back, replacing what the board shows with
+   * the position and clocks the server is holding.
+   */
+  applyResume(
+    board: SerializedBoardState,
+    clock: ClockState,
+    drawOffers: Color[],
+  ): void {
+    this.clockState = clock;
+    this.offeredDraws = [...drawOffers];
+    this.listener?.resumed(board, clock, drawOffers);
+  }
+
+  /** Reports that the connection went away and is being reopened. */
+  resuming(attempt: number): void {
+    this.listener?.resuming(attempt);
+  }
+
   /** Reports a message the session decided belongs to this game. */
   receive(
     message:
@@ -495,7 +749,8 @@ class Game implements OnlineGame {
       | Extract<ServerMessage, { type: "clock" }>
       | Extract<ServerMessage, { type: "moveRejected" }>
       | Extract<ServerMessage, { type: "gameOver" }>
-      | Extract<ServerMessage, { type: "opponentLeft" }>
+      | Extract<ServerMessage, { type: "opponentAway" }>
+      | Extract<ServerMessage, { type: "opponentBack" }>
       | Extract<ServerMessage, { type: "drawOffered" }>
       | Extract<ServerMessage, { type: "drawCancelled" }>,
   ): void {
@@ -518,11 +773,14 @@ class Game implements OnlineGame {
       case "drawCancelled":
         listener.drawCancelled(message.color);
         return;
+      case "opponentAway":
+        listener.opponentAway(message.color);
+        return;
+      case "opponentBack":
+        listener.opponentBack(message.color);
+        return;
       case "gameOver":
         listener.gameOver(message.status, message.winner);
-        return;
-      case "opponentLeft":
-        listener.opponentLeft(message.winner);
         return;
     }
   }

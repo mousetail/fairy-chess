@@ -291,3 +291,30 @@ Deno.test("every chaos level lays out a playable board", () => {
     );
   }
 });
+
+Deno.test("a session's starting FEN is readable through its alias map", () => {
+  for (let level = minComplexity; level <= maxComplexity; level++) {
+    const session = new GameSession(level);
+    const parts = session.fen().split(" ");
+    const symbols = session.symbols();
+
+    // The position a game is laid out in: white to move, nothing played yet.
+    assert.equal(parts[1], "w", `level ${level}: white moves first`);
+    assert.equal(parts[3], "-", `level ${level}: no en passant yet`);
+    assert.equal(parts[4], "0", `level ${level}: halfmove clock`);
+    assert.equal(parts[5], "1", `level ${level}: fullmove number`);
+
+    // Every letter the FEN places is a symbol the alias map knows, which is
+    // what makes the position — and the moves played from it — readable.
+    const known = new Set(
+      Object.values(symbols).map((symbol) => symbol.toLowerCase()),
+    );
+    const placed = parts[0].replace(/[1-8/]/g, "");
+    for (const letter of new Set(placed)) {
+      assert.ok(
+        known.has(letter.toLowerCase()),
+        `level ${level}: ${letter} names no piece`,
+      );
+    }
+  }
+});

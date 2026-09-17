@@ -14,13 +14,23 @@ import type { SerializedBoardState } from "../src/online/serialization.ts";
 import { FakeSocket } from "./fake-socket.ts";
 
 /** A session over sockets the test drives, and everything it has reported. */
-function sessionOver(options: { url?: string } = {}) {
+function sessionOver(
+  options: {
+    url?: string;
+    playerId?: string;
+    reconnectDelayMs?: number;
+    maxReconnectAttempts?: number;
+  } = {},
+) {
   const sockets: FakeSocket[] = [];
   const statuses: MatchmakingStatus[] = [];
   const games: OnlineGame[] = [];
 
   const session = new MatchmakingSession({
     url: options.url ?? "ws://matchmaking.test/ws",
+    playerId: options.playerId ?? "player-one",
+    reconnectDelayMs: options.reconnectDelayMs,
+    maxReconnectAttempts: options.maxReconnectAttempts,
     createSocket: () => {
       const socket = new FakeSocket();
       sockets.push(socket);
@@ -40,6 +50,11 @@ function sessionOver(options: { url?: string } = {}) {
   return { session, socket, sockets, statuses, games };
 }
 
+/** Lets a reconnect, which waits on a timer, have its turn. */
+function tick(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
 /** A listener that records everything the game told it. */
 function recorder(): {
   listener: GameListener;
@@ -55,10 +70,14 @@ function recorder(): {
         events.push(`clock:${white}:${black}:${running}`),
       moveRejected: (rejection) => events.push(`rejected:${rejection.reason}`),
       gameOver: (status, winner) => events.push(`over:${status}:${winner}`),
-      opponentLeft: (winner) => events.push(`left:${winner}`),
+      opponentAway: (color) => events.push(`away:${color}`),
+      opponentBack: (color) => events.push(`back:${color}`),
       drawOffered: (color) => events.push(`draw:${color}`),
       drawCancelled: (color) => events.push(`drawCancelled:${color}`),
       notice: (text) => events.push(`notice:${text}`),
+      resuming: (attempt) => events.push(`resuming:${attempt}`),
+      resumed: (_board, clock, offers) =>
+        events.push(`resumed:${clock.white}:${clock.running}:${offers.length}`),
       disconnected: () => events.push("disconnected"),
     },
   };
@@ -86,12 +105,34 @@ function matched(
   return {
     type: "matched",
     gameId: "game-1",
+    playerId: "player-one",
     color: "white",
     opponentName: "Bob",
     complexity: 0,
     complexityLabel: "normal chess",
     timeControl: TIME_CONTROL,
     board: BOARD,
+    ...overrides,
+  };
+}
+
+/** A `resumed` message, with whatever the test cares about overridden. */
+function resumed(
+  overrides: Partial<Extract<ServerMessage, { type: "resumed" }>> = {},
+): Extract<ServerMessage, { type: "resumed" }> {
+  return {
+    type: "resumed",
+    gameId: "game-1",
+    playerId: "player-one",
+    color: "white",
+    playerName: "Ada",
+    opponentName: "Bob",
+    complexity: 0,
+    complexityLabel: "normal chess",
+    timeControl: TIME_CONTROL,
+    board: BOARD,
+    clock: { white: 120_000, black: 180_000, running: "white" },
+    drawOffers: [],
     ...overrides,
   };
 }
@@ -111,7 +152,7 @@ test("queuing connects, then joins once the socket is up", () => {
 
   socket().open();
   assert.deepEqual(socket().sent, [
-    '{"type":"join","complexity":2,"timeControl":1,"name":"Ada"}',
+    '{"type":"join","complexity":2,"timeControl":1,"name":"Ada","playerId":"player-one"}',
   ]);
 
   socket().receive({ type: "queued", complexity: 2, timeControl: 1, waiting: 3 });
@@ -128,7 +169,7 @@ test("asking again while queued updates the level without reconnecting", () => {
   assert.equal(sockets.length, 1);
   assert.equal(
     socket().sent.at(-1),
-    '{"type":"join","complexity":3,"timeControl":2,"name":"Ada"}',
+    '{"type":"join","complexity":3,"timeControl":2,"name":"Ada","playerId":"player-one"}',
   );
 });
 
@@ -139,7 +180,7 @@ test("cancelling a search tells the server", () => {
 
   session.cancel();
   assert.deepEqual(socket().sent, [
-    '{"type":"join","complexity":1,"timeControl":0}',
+    '{"type":"join","complexity":1,"timeControl":0,"playerId":"player-one"}',
     '{"type":"cancelQueue"}',
   ]);
   assert.deepEqual(statuses.at(-1), { state: "idle" });
@@ -277,12 +318,59 @@ test("a finished game makes room for another search", () => {
   assert.equal(sockets.length, 1);
   assert.equal(
     socket().sent.at(-1),
-    '{"type":"join","complexity":2,"timeControl":1,"name":"Ada"}',
+    '{"type":"join","complexity":2,"timeControl":1,"name":"Ada","playerId":"player-one"}',
   );
 });
 
-test("the opponent leaving ends the game and lets the player queue again", () => {
-  const { session, socket, sockets, games } = sessionOver();
+test("the opponent going away is reported without ending the game", () => {
+  const { session, socket, games } = sessionOver();
+  session.queue(0, 0, "");
+  socket().open();
+  socket().receive(matched());
+
+  const { listener, events } = recorder();
+  games.at(-1)!.listen(listener);
+  socket().receive({ type: "opponentAway", color: "black" });
+  socket().receive({ type: "opponentBack", color: "black" });
+
+  assert.deepEqual(events, ["away:black", "back:black"]);
+  assert.equal(session.currentGame, games.at(-1));
+});
+
+test("a game whose connection drops is taken back over a new socket", async () => {
+  const { session, socket, sockets, games } = sessionOver({
+    reconnectDelayMs: 0,
+    maxReconnectAttempts: 3,
+  });
+  session.queue(0, 0, "");
+  socket().open();
+  socket().receive(matched());
+
+  const { listener, events } = recorder();
+  games.at(-1)!.listen(listener);
+  socket().emit("close", {});
+  assert.deepEqual(events, ["resuming:1"]);
+
+  // The seat is asked for again over a fresh socket, with the game and player.
+  await tick();
+  assert.equal(sockets.length, 2);
+  sockets[1].open();
+  assert.deepEqual(sockets[1].sent, [
+    '{"type":"rejoin","gameId":"game-1","playerId":"player-one"}',
+  ]);
+
+  sockets[1].receive(resumed());
+  assert.deepEqual(events, ["resuming:1", "resumed:120000:white:0"]);
+  // The same game object is kept, so the board already on screen is updated.
+  assert.equal(games.length, 1);
+  assert.equal(session.currentGame, games[0]);
+});
+
+test("a connection that cannot be restored ends the game", async () => {
+  const { session, socket, sockets, games } = sessionOver({
+    reconnectDelayMs: 0,
+    maxReconnectAttempts: 1,
+  });
   session.queue(0, 0, "");
   socket().open();
   socket().receive(matched());
@@ -291,11 +379,33 @@ test("the opponent leaving ends the game and lets the player queue again", () =>
   games.at(-1)!.listen(listener);
   socket().emit("close", {});
 
-  assert.deepEqual(events, ["disconnected"]);
-  // The socket is gone, so the next search opens a new one.
-  session.queue(0, 0, "");
+  // The single attempt opens a socket that then fails too, so it is given up.
+  await tick();
   assert.equal(sockets.length, 2);
-  assert.equal(session.status.state, "connecting");
+  sockets[1].open();
+  sockets[1].emit("close", {});
+  assert.deepEqual(events, ["resuming:1", "disconnected"]);
+  assert.equal(session.currentGame, null);
+});
+
+test("a game named in the address bar is rejoined when the page loads", () => {
+  const { session, socket, games } = sessionOver();
+  session.resume("game-9");
+  assert.deepEqual(session.status, { state: "connecting" });
+
+  socket().open();
+  assert.deepEqual(socket().sent, [
+    '{"type":"rejoin","gameId":"game-9","playerId":"player-one"}',
+  ]);
+
+  socket().receive(resumed({ gameId: "game-9", color: "black", playerName: "Bob" }));
+  const game = games.at(-1);
+  assert.ok(game, "the rejoined game should be handed over");
+  assert.equal(game.gameId, "game-9");
+  assert.equal(game.color, "black");
+  assert.equal(game.playerName, "Bob");
+  assert.deepEqual(game.clock, { white: 120_000, black: 180_000, running: "white" });
+  assert.deepEqual(session.status, { state: "idle" });
 });
 
 test("a search that loses its connection says so", () => {

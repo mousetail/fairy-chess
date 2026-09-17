@@ -8,11 +8,14 @@ import {
 } from "../src/chess-board.ts";
 import { ChessGame, type GameStatus } from "../src/chess-game.ts";
 import {
+  deserializeBoardState,
   pieceTypeFromKey,
   pieceTypeKey,
   serializeBoardState,
   type SerializedBoardState,
+  serializeSymbols,
 } from "../src/online/serialization.ts";
+import { boardStateToFen } from "../src/ai/fen.ts";
 import type {
   Color,
   GameResult,
@@ -67,9 +70,21 @@ export class GameSession {
   readonly game: ChessGame;
   private result: GameResult | null = null;
 
-  constructor(complexity: number) {
+  constructor(
+    complexity: number,
+    restored?: { board: SerializedBoardState; result: GameResult | null },
+  ) {
     this.complexity = complexity;
-    this.game = ChessGame.defaultLayout(chaosLevels[complexity]);
+    if (restored) {
+      // A game that was already under way: the position is taken as it was
+      // stored rather than laid out again, so the players carry on where they
+      // left off after the server was restarted.
+      this.game = new ChessGame();
+      this.game.state = deserializeBoardState(restored.board);
+      this.result = restored.result;
+    } else {
+      this.game = ChessGame.defaultLayout(chaosLevels[complexity]);
+    }
   }
 
   get colorToMove(): Color {
@@ -84,6 +99,23 @@ export class GameSession {
   /** The current position, ready to send to a client. */
   serializeBoard(): SerializedBoardState {
     return serializeBoardState(this.game.state);
+  }
+
+  /**
+   * The position as FEN, which is how a game's starting position is kept: a
+   * chaos layout is laid out afresh each time, so the position a game began from
+   * cannot be worked out from its settings alone.
+   */
+  fen(): string {
+    return boardStateToFen(this.game.state, 1);
+  }
+
+  /**
+   * The alias map for this game: the symbol each piece type is written with in
+   * the FEN and the move list. Fixed when the game was laid out.
+   */
+  symbols(): Record<string, string> {
+    return serializeSymbols(this.game.state);
   }
 
   /**

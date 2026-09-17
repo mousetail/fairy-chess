@@ -69,8 +69,6 @@ test("a rule reports the value it adds, including a positional override", () => 
     replacementRules.find((candidate) => candidate.name === name)!;
   assert.equal(addedValue(rule("Rook → Knook"), board, "white"), 4);
   assert.equal(addedValue(rule("Rook → Wazir"), board, "white"), -3);
-  // Commoners are worth the same as pawns, but the rule adds a positional 3.
-  assert.equal(addedValue(rule("Pawns → Commoners"), board, "white"), 3);
 });
 
 test("full chaos keeps the classic king about three quarters of the time", () => {

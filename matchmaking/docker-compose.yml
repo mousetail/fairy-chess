@@ -1,0 +1,25 @@
+# A local Redis and PostgreSQL, for developing and testing the stores.
+#
+#   docker compose up -d
+#   REDIS_URL=redis://127.0.0.1:56379 \
+#   DATABASE_URL=postgres://fairy:fairy@127.0.0.1:55432/fairy_chess \
+#     deno task test
+#
+# The ports are deliberately not the defaults, so this cannot clash with a Redis
+# or PostgreSQL already running on the machine. The data is thrown away with the
+# containers: `docker compose down` leaves nothing behind.
+
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "127.0.0.1:56379:6379"
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: fairy
+      POSTGRES_PASSWORD: fairy
+      POSTGRES_DB: fairy_chess
+    ports:
+      - "127.0.0.1:55432:5432"

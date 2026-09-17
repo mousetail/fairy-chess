@@ -1,5 +1,5 @@
 import type { Tile } from "../src/chess-tile.ts";
-import type { ClientMessage } from "../src/online/protocol.ts";
+import { type ClientMessage, isPlayerId } from "../src/online/protocol.ts";
 
 export type ParseResult =
   | { ok: true; message: ClientMessage }
@@ -36,13 +36,31 @@ export function parseClientMessage(raw: string): ParseResult {
       if (record.name !== undefined && typeof record.name !== "string") {
         return invalid("A name must be a string.");
       }
+      if (record.playerId !== undefined && !isPlayerId(record.playerId)) {
+        return invalid("A playerId must be a short identifier.");
+      }
+      const message: Extract<ClientMessage, { type: "join" }> = {
+        type: "join",
+        complexity: record.complexity,
+        timeControl: record.timeControl,
+        name: record.name,
+      };
+      if (isPlayerId(record.playerId)) message.playerId = record.playerId;
+      return { ok: true, message };
+    }
+    case "rejoin": {
+      if (typeof record.gameId !== "string" || record.gameId === "") {
+        return invalid("A rejoin needs a gameId.");
+      }
+      if (!isPlayerId(record.playerId)) {
+        return invalid("A rejoin needs a valid playerId.");
+      }
       return {
         ok: true,
         message: {
-          type: "join",
-          complexity: record.complexity,
-          timeControl: record.timeControl,
-          name: record.name,
+          type: "rejoin",
+          gameId: record.gameId,
+          playerId: record.playerId,
         },
       };
     }

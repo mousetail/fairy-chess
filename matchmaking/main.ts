@@ -7,6 +7,9 @@ import { chaosLevels } from "../src/replacement-rules.ts";
 import { type Client, Lobby } from "./lobby.ts";
 import { maxComplexity, minComplexity } from "./matchmaking.ts";
 import { parseClientMessage } from "./parse.ts";
+import { PostgresPlayerStore } from "./postgres-store.ts";
+import { RedisGameStore } from "./redis-store.ts";
+import type { GameStore, PlayerStore } from "./store.ts";
 
 /** `WebSocket.OPEN`, spelled out so no DOM global is needed at load time. */
 const openReadyState = 1;
@@ -37,6 +40,12 @@ export interface ServerOptions {
   heartbeatMs?: number;
   /** The largest message accepted from a client, in UTF-16 code units. */
   maxMessageBytes?: number;
+  /**
+   * The lobby to run. A deployment builds one with its stores and restores the
+   * games in progress before handing it over; a test lets the server make its
+   * own, which keeps everything in memory.
+   */
+  lobby?: Lobby;
   /** Overridable for tests, which want deterministic colours and settings. */
   random?: () => number;
 }
@@ -91,7 +100,7 @@ export function startServer(options: ServerOptions = {}): RunningServer {
   const maxMessageBytes = options.maxMessageBytes ?? defaultMaxMessageBytes;
   const random = options.random;
 
-  const lobby = new Lobby(random ? { random } : {});
+  const lobby = options.lobby ?? new Lobby(random ? { random } : {});
   const connections = new Set<Connection>();
 
   const upgrade = (request: Request): Response => {
@@ -228,6 +237,27 @@ function isAllowedOrigin(request: Request, allowedOrigins: string[]): boolean {
 }
 
 if (import.meta.main) {
+  await runFromEnvironment();
+}
+
+/**
+ * Builds the lobby from the environment, restores the games that were running,
+ * and starts serving. The stores are optional: a deployment that names none
+ * keeps its games in memory, as it did before there was anywhere to keep them.
+ */
+async function runFromEnvironment(): Promise<void> {
+  const games = await openGameStore(Deno.env.get("REDIS_URL"));
+  const players = await openPlayerStore(Deno.env.get("DATABASE_URL"));
+
+  const lobby = new Lobby({ games, players });
+  if (games) {
+    try {
+      await lobby.restore();
+    } catch (error) {
+      console.error("Could not restore the games in progress:", error);
+    }
+  }
+
   startServer({
     port: readPort(Deno.env.get("PORT")),
     hostname: Deno.env.get("HOST") || "0.0.0.0",
@@ -237,7 +267,41 @@ if (import.meta.main) {
       Deno.env.get("MAX_MESSAGE_BYTES"),
       defaultMaxMessageBytes,
     ),
+    lobby,
   });
+}
+
+/**
+ * The game store named by the environment, or nothing when it names none or the
+ * server cannot be reached. A deployment keeps running without it: the games
+ * are then held in memory, and the failure is logged rather than fatal.
+ */
+async function openGameStore(
+  url: string | undefined,
+): Promise<GameStore | undefined> {
+  if (!url) return undefined;
+  try {
+    return await RedisGameStore.open(url);
+  } catch (error) {
+    console.error("Could not reach Redis, so games will not be stored:", error);
+    return undefined;
+  }
+}
+
+/** The player store named by the environment, or nothing when it names none. */
+async function openPlayerStore(
+  url: string | undefined,
+): Promise<PlayerStore | undefined> {
+  if (!url) return undefined;
+  try {
+    return await PostgresPlayerStore.open(url);
+  } catch (error) {
+    console.error(
+      "Could not reach PostgreSQL, so players will not be stored:",
+      error,
+    );
+    return undefined;
+  }
 }
 
 /** The port named by the environment, falling back to the default. */

@@ -2,6 +2,7 @@ import { invertColor } from "./chess-board.ts";
 import ChessScreen, { type ChessScreenOptions } from "./chess-screen/index.ts";
 import { DiscoveriesScreen } from "./discoveries-screen.ts";
 import { HomeScreen } from "./home-screen.ts";
+import { gameHash, gameIdFromHash } from "./online/game-link.ts";
 import type { Color } from "./online/protocol.ts";
 import { type OnlineGame, MatchmakingSession } from "./online/session.ts";
 import type { Screen } from "./screen.ts";
@@ -35,6 +36,11 @@ export class App {
   /** Shows the home screen, where a search for an opponent can be started. */
   start(): void {
     this.showHome();
+    // A page opened on a game's link was reloaded, or followed someone's link
+    // to it. The seat is asked for; the board replaces the home screen as soon
+    // as the server answers, and the home screen shows why when it does not.
+    const gameId = gameIdFromHash(location.hash);
+    if (gameId !== null) this.matchmaking.resume(gameId);
   }
 
   private show(screen: Screen): void {
@@ -102,24 +108,51 @@ export class App {
         screen.applyClock(white, black, running),
       moveRejected: (rejection) => screen.reportRejection(rejection),
       notice: (text) => screen.showNotice(text),
-      gameOver: (status, winner) => screen.declareResult(status, winner),
-      opponentLeft: (winner) => {
-        screen.declareResult("resign", winner);
-        screen.showNotice("Your opponent left the game.");
+      gameOver: (status, winner) => {
+        this.clearGameHash();
+        screen.declareResult(status, winner);
       },
+      opponentAway: () =>
+        screen.showNotice(
+          "Your opponent's connection dropped. The game carries on; their " +
+            "clock is running.",
+        ),
+      opponentBack: () => screen.showNotice("Your opponent is back."),
       drawOffered: (color) => screen.reportDrawOffer(color),
       drawCancelled: (color) => screen.reportDrawCancelled(color),
-      disconnected: () => {
-        if (screen.gameEnded) return;
-        // Whoever stayed would have been awarded the win, so the game is over
-        // here too; the notice says why.
-        screen.declareResult("resign", invertColor(game.color));
+      resuming: (attempt) =>
         screen.showNotice(
-          "The connection to the matchmaking server was lost, so the game is over.",
+          `The connection was lost. Trying to rejoin the game (attempt ${attempt})…`,
+        ),
+      resumed: (board, clock, drawOffers) =>
+        screen.applyResume(board, clock, drawOffers),
+      disconnected: () => {
+        this.clearGameHash();
+        if (screen.gameEnded) return;
+        // The seat could not be taken back. The server still holds it and this
+        // browser's clock is running there, so the game will be lost on time if
+        // nobody returns; the board says so here, and a reload can still find
+        // the game and take the seat back.
+        screen.declareResult("timeout", invertColor(game.color));
+        screen.showNotice(
+          "The connection to the matchmaking server was lost. The game is over " +
+            "here, but reloading this page may still find it.",
         );
       },
     });
 
+    // The game's UUID names it in the address bar, so a reload comes back to it.
+    location.hash = gameHash(game.gameId);
     this.show(screen);
+    // The position, clocks and offers the server is holding are applied after
+    // the screen is up: a fresh game's are the same ones its options already
+    // carry, and a rejoined game's replace them.
+    screen.applyResume(game.board, game.clock, game.drawOffers);
+  }
+
+  /** Takes the game's name out of the address bar, once there is no game to name. */
+  private clearGameHash(): void {
+    if (gameIdFromHash(location.hash) === null) return;
+    history.replaceState(null, "", location.pathname + location.search);
   }
 }

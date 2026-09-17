@@ -75,14 +75,26 @@ export interface SerializedBoardState {
   lastMove?: SerializedMove;
 }
 
-export function serializeBoardState(
+/**
+ * The symbol in play for each piece type, keyed by the piece type's key.
+ *
+ * This is the alias map: a board has more piece types than the alphabet has
+ * letters, so a position and its move list can only be read back with the
+ * symbols they were written with.
+ */
+export function serializeSymbols(
   state: ChessBoardState,
-): SerializedBoardState {
+): Record<string, string> {
   const symbols: Record<string, string> = {};
   for (const [type, symbol] of state.symbols) {
     symbols[pieceTypeKey(type)] = symbol;
   }
+  return symbols;
+}
 
+export function serializeBoardState(
+  state: ChessBoardState,
+): SerializedBoardState {
   const serialized: SerializedBoardState = {
     pieces: state.pieces.map((piece) => ({
       id: piece.id,
@@ -93,7 +105,7 @@ export function serializeBoardState(
     })),
     turn: state.turn,
     halfTurnNumber: state.halfTurnNumber,
-    symbols,
+    symbols: serializeSymbols(state),
   };
 
   if (state.lastMove) serialized.lastMove = serializeMove(state.lastMove);

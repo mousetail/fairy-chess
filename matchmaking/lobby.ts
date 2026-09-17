@@ -1,11 +1,12 @@
 import { invertColor } from "../src/chess-board.ts";
 import { serializeMove } from "../src/online/serialization.ts";
-import type {
-  ClientMessage,
-  Color,
-  GameResult,
-  ServerMessage,
-  TimeControlSpec,
+import {
+  type ClientMessage,
+  type Color,
+  type GameResult,
+  isPlayerId,
+  type ServerMessage,
+  type TimeControlSpec,
 } from "../src/online/protocol.ts";
 import {
   clampTimeControl,
@@ -16,6 +17,7 @@ import {
 import { chaosLevels } from "../src/replacement-rules.ts";
 import { GameClock } from "./clock.ts";
 import { GameSession, type MoveRequest } from "./game-session.ts";
+import { movesToPgn } from "./pgn.ts";
 import {
   canMatch,
   chooseComplexity,
@@ -23,26 +25,46 @@ import {
   clampComplexity,
   type Preference,
 } from "./matchmaking.ts";
+import {
+  type FinishedGame,
+  type GameStore,
+  MemoryGameStore,
+  MemoryPlayerStore,
+  type PlayerStore,
+  type StoredGame,
+  type StoredMove,
+  type StoredSeat,
+} from "./store.ts";
 
 /** What the lobby needs from a connected player. */
 export interface Client {
   readonly id: string;
   send(message: ServerMessage): void;
+  /** Drops the connection, when the seat it held is taken over. Optional in tests. */
+  close?(code: number, reason: string): void;
 }
 
 /** A player waiting for an opponent. */
 interface WaitingPlayer extends Preference {
   client: Client;
-  name: string;
+  seat: StoredSeat;
 }
 
-/** A game in progress, together with the players sitting at it. */
+/**
+ * A game in progress, together with the players sitting at it.
+ *
+ * A seat is `null` while its player is away. The game is not over when that
+ * happens: the clock is what ends it if they do not come back, and the player
+ * can take the seat back until their time runs out.
+ */
 interface Room {
   id: string;
   session: GameSession;
   clock: GameClock;
-  clients: Record<Color, Client>;
-  names: Record<Color, string>;
+  clients: Record<Color, Client | null>;
+  seats: Record<Color, StoredSeat>;
+  /** The position the game was laid out in, as FEN. */
+  initialFen: string;
   /**
    * The sides that have offered a draw. An offer stands until a move is played,
    * which clears both sides' offers, or until the side that made it takes it
@@ -51,6 +73,10 @@ interface Room {
   drawOffers: Set<Color>;
   /** When the players were last sent their clocks, so they are not spammed. */
   lastClockAt: number;
+  /** Every move played so far, so the game's log survives a restart. */
+  moves: StoredMove[];
+  /** When the game started, in wall-clock milliseconds. */
+  createdAt: number;
 }
 
 export interface LobbyOptions {
@@ -58,6 +84,10 @@ export interface LobbyOptions {
   random?: () => number;
   /** The current time, overridable so a test can drive the clocks itself. */
   now?: () => number;
+  /** Where the running games are kept. In memory unless a deployment says otherwise. */
+  games?: GameStore;
+  /** Where players and finished games are kept. In memory unless a deployment says otherwise. */
+  players?: PlayerStore;
 }
 
 /** The longest name accepted from a client. */
@@ -75,10 +105,10 @@ const clockIntervalMs = 1000;
 /**
  * Pairs waiting players and runs the games they are paired into.
  *
- * Everything is held in memory, which is what lets the lobby stay simple: a
- * player is either waiting, at a table, or gone. That also means the server has
- * to run as a single instance, since two instances would keep two separate
- * queues and could not pair their players with each other.
+ * A game outlives both the connection that started it and the process that is
+ * running it: it is kept in the game store under a UUID, so a player who reloads
+ * or a server that restarts can pick it up again. Waiting players are still held
+ * in memory, so the server must run as a single instance.
  */
 export class Lobby {
   private readonly waiting = new Map<string, WaitingPlayer>();
@@ -86,11 +116,21 @@ export class Lobby {
   private readonly roomByClient = new Map<string, Room>();
   private readonly random: () => number;
   private readonly now: () => number;
-  private nextGameNumber = 1;
+  private readonly games: GameStore;
+  private readonly players: PlayerStore;
+  /**
+   * The writes waiting to reach the game store, per game. A change is written
+   * when it happens and the answer is not waited for, so the writes are chained
+   * to keep them in order: a save still in flight when the game ends must not
+   * land after the game has been removed.
+   */
+  private readonly writes = new Map<string, Promise<void>>();
 
   constructor(options: LobbyOptions = {}) {
     this.random = options.random ?? Math.random;
     this.now = options.now ?? Date.now;
+    this.games = options.games ?? new MemoryGameStore();
+    this.players = options.players ?? new MemoryPlayerStore();
   }
 
   /** How many players are waiting for an opponent. */
@@ -103,10 +143,35 @@ export class Lobby {
     return this.rooms.size;
   }
 
+  /**
+   * Takes back the games that were running when the server last stopped.
+   *
+   * A restored game has nobody sitting at it, so both seats are treated as gone:
+   * their free first moves are over and the clocks run, so a game nobody comes
+   * back to ends on time rather than waiting for a move that will never come. A
+   * game whose clock ran out while the server was down is finished here.
+   */
+  async restore(): Promise<void> {
+    const records = await this.games.loadAll();
+    const now = this.now();
+    for (const record of records) {
+      if (this.rooms.has(record.id)) continue;
+      const room = this.roomFromRecord(record);
+      for (const color of ["white", "black"] as Color[]) {
+        room.clock.absent(color, room.session.colorToMove, now);
+      }
+      this.rooms.set(record.id, room);
+    }
+    this.tick(now);
+  }
+
   handleMessage(client: Client, message: ClientMessage): void {
     switch (message.type) {
       case "join":
         this.join(client, message);
+        return;
+      case "rejoin":
+        this.rejoin(client, message);
         return;
       case "cancelQueue":
         this.cancelQueue(client);
@@ -142,7 +207,12 @@ export class Lobby {
    */
   join(
     client: Client,
-    options: { complexity: number; timeControl: number; name?: string },
+    options: {
+      complexity: number;
+      timeControl: number;
+      name?: string;
+      playerId?: string;
+    },
   ): void {
     if (this.roomByClient.has(client.id)) {
       this.fail(client, "You are already playing a game.");
@@ -151,11 +221,17 @@ export class Lobby {
 
     const complexity = clampComplexity(options.complexity);
     const timeControl = clampTimeControl(options.timeControl);
+    const seat: StoredSeat = {
+      id: resolvePlayerId(options.playerId),
+      name: sanitizeName(options.name),
+    };
+    this.rememberPlayer(seat);
+
     const waiting: WaitingPlayer = {
       client,
       complexity,
       timeControl,
-      name: sanitizeName(options.name),
+      seat,
     };
     this.waiting.set(client.id, waiting);
 
@@ -173,6 +249,58 @@ export class Lobby {
     this.waiting.delete(opponent.client.id);
     this.waiting.delete(client.id);
     this.startGame(opponent, waiting);
+  }
+
+  /**
+   * Puts `client` back at a game that is still running, if the identifier it
+   * gives holds a seat there. A connection already in the seat is taken over,
+   * since the identifier is the player's own and the older connection may be one
+   * the server has not noticed going away.
+   */
+  rejoin(
+    client: Client,
+    message: Extract<ClientMessage, { type: "rejoin" }>,
+  ): void {
+    if (this.roomByClient.has(client.id)) {
+      this.fail(client, "You are already playing a game.");
+      return;
+    }
+
+    const room = this.rooms.get(message.gameId);
+    if (!room) {
+      this.fail(client, "That game is no longer running.");
+      return;
+    }
+
+    const color = this.colorOfPlayer(room, message.playerId);
+    // The same answer either way, so a stranger cannot learn which identifiers
+    // hold a seat at a game they only know the number of.
+    if (color === null) {
+      this.fail(client, "You are not a player in that game.");
+      return;
+    }
+
+    // A seat may look taken over by a connection that has in fact gone: a
+    // half-open socket the server has not noticed closing. The identifier is
+    // the player's own, so the new connection takes the seat and the old one is
+    // dropped rather than both being refused.
+    const previous = room.clients[color];
+    if (previous) {
+      this.roomByClient.delete(previous.id);
+      previous.send({
+        type: "error",
+        message: "This seat was taken over by another connection.",
+      });
+      previous.close?.(1000, "seat taken over");
+    }
+
+    room.clients[color] = client;
+    this.roomByClient.set(client.id, room);
+    client.send(this.resumedMessage(room, color));
+    room.clients[invertColor(color)]?.send({
+      type: "opponentBack",
+      color,
+    });
   }
 
   /** Takes `client` out of the queue, if it is in it. */
@@ -221,6 +349,7 @@ export class Lobby {
     // The position has moved on, so an offer made before the move no longer
     // stands. The clients clear theirs when this `moved` reaches them.
     room.drawOffers.clear();
+    room.moves.push({ color, pgn: outcome.applied.pgn });
 
     this.broadcast(room, {
       type: "moved",
@@ -238,6 +367,7 @@ export class Lobby {
 
     room.clock.afterMove(color, invertColor(color), now);
     this.sendClock(room, now);
+    this.persist(room);
   }
 
   /** Ends `client`'s game in its opponent's favour. */
@@ -296,7 +426,10 @@ export class Lobby {
 
     this.broadcast(room, { type: "drawOffered", color });
 
-    if (!room.drawOffers.has(invertColor(color))) return;
+    if (!room.drawOffers.has(invertColor(color))) {
+      this.persist(room);
+      return;
+    }
     this.endGame(room, room.session.draw());
   }
 
@@ -318,22 +451,27 @@ export class Lobby {
     if (!room.drawOffers.delete(color)) return;
 
     this.broadcast(room, { type: "drawCancelled", color });
+    this.persist(room);
   }
 
   /**
-   * Checks every game's clocks.
+   * Checks every game's clock.
    *
-   * A game whose side to move has run out of time is lost, and the players of
-   * every other game are sent their clocks again so a client that fell behind
-   * catches up. The caller runs this on a timer; a test calls it directly.
+   * A game whose side to move has run out of time is lost, which is also what
+   * ends a game whose player went away without coming back. The players of every
+   * other game are sent their clocks again so a client that fell behind catches
+   * up. The caller runs this on a timer; a test calls it directly.
    */
   tick(now: number = this.now()): void {
     for (const room of [...this.rooms.values()]) {
+      if (!this.rooms.has(room.id)) continue;
+
       const late = room.clock.flagged(now);
       if (late !== null) {
         this.endGame(room, room.session.timeout(late));
         continue;
       }
+
       if (
         room.clock.runningColor !== null &&
         now - room.lastClockAt >= clockIntervalMs
@@ -344,8 +482,12 @@ export class Lobby {
   }
 
   /**
-   * Drops a client that has gone away, whether it was waiting or playing. Its
-   * opponent wins, since a game in progress cannot be rejoined.
+   * Drops a client that has gone away, whether it was waiting or playing.
+   *
+   * A game in progress is not lost when its player disconnects: the seat is
+   * left empty for them to come back to. The clock is what ends it if they do
+   * not — it runs for the side to move, including one who never made their free
+   * first move, so the opponent wins on time rather than waiting forever.
    */
   disconnect(client: Client): void {
     if (this.waiting.delete(client.id)) return;
@@ -353,10 +495,12 @@ export class Lobby {
     const room = this.roomByClient.get(client.id);
     if (!room) return;
 
+    this.roomByClient.delete(client.id);
     const color = this.colorOf(room, client.id);
-    const opponent = invertColor(color);
-    room.clients[opponent].send({ type: "opponentLeft", winner: opponent });
-    this.closeRoom(room);
+    room.clients[color] = null;
+    room.clock.absent(color, room.session.colorToMove, this.now());
+    room.clients[invertColor(color)]?.send({ type: "opponentAway", color });
+    this.persist(room);
   }
 
   /**
@@ -393,14 +537,23 @@ export class Lobby {
       ? [first, second]
       : [second, first];
 
+    const now = this.now();
+    const session = new GameSession(complexity);
     const room: Room = {
-      id: `game-${this.nextGameNumber++}`,
-      session: new GameSession(complexity),
+      // The UUID is the game's public name: it is what the players put in the
+      // address bar to come back to the game, and what the store is keyed by.
+      id: crypto.randomUUID(),
+      session,
       clock: new GameClock(timeControl),
       clients: { white: white.client, black: black.client },
-      names: { white: white.name, black: black.name },
+      seats: { white: white.seat, black: black.seat },
+      // The layout is fixed here, so this is the last moment the starting
+      // position can be written down.
+      initialFen: session.fen(),
       drawOffers: new Set(),
-      lastClockAt: this.now(),
+      lastClockAt: now,
+      moves: [],
+      createdAt: now,
     };
     this.rooms.set(room.id, room);
     this.roomByClient.set(white.client.id, room);
@@ -408,6 +561,7 @@ export class Lobby {
 
     white.client.send(this.matchedMessage(room, "white"));
     black.client.send(this.matchedMessage(room, "black"));
+    this.persist(room);
   }
 
   private matchedMessage(room: Room, color: Color): ServerMessage {
@@ -415,8 +569,9 @@ export class Lobby {
     return {
       type: "matched",
       gameId: room.id,
+      playerId: room.seats[color].id,
       color,
-      opponentName: room.names[invertColor(color)],
+      opponentName: room.seats[invertColor(color)].name,
       complexity,
       complexityLabel: chaosLevels[complexity].label,
       timeControl: room.clock.timeControl,
@@ -424,13 +579,37 @@ export class Lobby {
     };
   }
 
+  private resumedMessage(room: Room, color: Color): ServerMessage {
+    const complexity = room.session.complexity;
+    return {
+      type: "resumed",
+      gameId: room.id,
+      playerId: room.seats[color].id,
+      color,
+      playerName: room.seats[color].name,
+      opponentName: room.seats[invertColor(color)].name,
+      complexity,
+      complexityLabel: chaosLevels[complexity].label,
+      timeControl: room.clock.timeControl,
+      board: room.session.serializeBoard(),
+      clock: room.clock.snapshot(this.now()),
+      drawOffers: [...room.drawOffers],
+    };
+  }
+
   private colorOf(room: Room, clientId: string): Color {
-    return room.clients.white.id === clientId ? "white" : "black";
+    return room.clients.white?.id === clientId ? "white" : "black";
+  }
+
+  private colorOfPlayer(room: Room, playerId: string): Color | null {
+    if (room.seats.white.id === playerId) return "white";
+    if (room.seats.black.id === playerId) return "black";
+    return null;
   }
 
   private broadcast(room: Room, message: ServerMessage): void {
-    room.clients.white.send(message);
-    room.clients.black.send(message);
+    room.clients.white?.send(message);
+    room.clients.black?.send(message);
   }
 
   /** Sends both players what their clocks have left, and whose is running. */
@@ -440,14 +619,100 @@ export class Lobby {
   }
 
   private endGame(room: Room, result: GameResult): void {
+    if (!this.rooms.delete(room.id)) return;
+    for (const color of ["white", "black"] as Color[]) {
+      const client = room.clients[color];
+      if (client) this.roomByClient.delete(client.id);
+    }
     this.broadcast(room, { type: "gameOver", ...result });
-    this.closeRoom(room);
+    this.persistFinished(room, result);
   }
 
-  private closeRoom(room: Room): void {
-    this.rooms.delete(room.id);
-    this.roomByClient.delete(room.clients.white.id);
-    this.roomByClient.delete(room.clients.black.id);
+  /** Rebuilds a room from the record the store kept of it. */
+  private roomFromRecord(record: StoredGame): Room {
+    return {
+      id: record.id,
+      session: new GameSession(record.complexity, {
+        board: record.board,
+        result: record.result,
+      }),
+      clock: new GameClock(
+        describeTimeControl(record.timeControl),
+        record.clock,
+      ),
+      clients: { white: null, black: null },
+      seats: record.seats,
+      initialFen: record.initialFen,
+      drawOffers: new Set(record.drawOffers),
+      lastClockAt: this.now(),
+      moves: record.moves,
+      createdAt: record.createdAt,
+    };
+  }
+
+  /** The record of a running game, as the store keeps it. */
+  private recordOf(room: Room): StoredGame {
+    return {
+      id: room.id,
+      complexity: room.session.complexity,
+      timeControl: room.clock.timeControl.index,
+      board: room.session.serializeBoard(),
+      initialFen: room.initialFen,
+      clock: room.clock.state(),
+      seats: room.seats,
+      drawOffers: [...room.drawOffers],
+      moves: room.moves,
+      createdAt: room.createdAt,
+      result: room.session.finished,
+    };
+  }
+
+  private persist(room: Room): void {
+    this.enqueue(room.id, () => this.games.save(this.recordOf(room)));
+  }
+
+  private persistFinished(room: Room, result: GameResult): void {
+    this.enqueue(room.id, () => this.games.remove(room.id));
+
+    const finished: FinishedGame = {
+      id: room.id,
+      complexity: room.session.complexity,
+      timeControl: room.clock.timeControl.index,
+      seats: room.seats,
+      result,
+      pgn: movesToPgn(room.moves),
+      initialFen: room.initialFen,
+      symbols: room.session.symbols(),
+      startedAt: room.createdAt,
+      finishedAt: this.now(),
+    };
+    this.players.recordGame(finished).catch((error) => {
+      console.error(`Could not record the finished game ${room.id}:`, error);
+    });
+  }
+
+  /**
+   * Adds a write for `id` to that game's queue, so writes land in the order they
+   * happened. A failed write is reported and the next one still runs.
+   */
+  private enqueue(id: string, work: () => Promise<void>): void {
+    const previous = this.writes.get(id) ?? Promise.resolve();
+    const next = previous
+      .catch(() => {})
+      .then(work)
+      .catch((error) => {
+        console.error(`Could not store game ${id}:`, error);
+      });
+    this.writes.set(id, next);
+    void next.finally(() => {
+      if (this.writes.get(id) === next) this.writes.delete(id);
+    });
+  }
+
+  private rememberPlayer(seat: StoredSeat): void {
+    this.players.remember(seat.id, seat.name).catch((error) => {
+      console.error(`Could not store player ${seat.id}:`, error);
+    });
   }
 
   private fail(client: Client, message: string): void {
@@ -475,4 +740,9 @@ export function sanitizeName(value: unknown): string {
   const cleaned = value.replace(/[\u0000-\u001f\u007f]/g, "").trim();
   if (cleaned === "") return "Anonymous";
   return cleaned.slice(0, maxNameLength);
+}
+
+/** The identifier a client sent, or a fresh one when it sent none or a bad one. */
+function resolvePlayerId(value: unknown): string {
+  return isPlayerId(value) ? value : crypto.randomUUID();
 }

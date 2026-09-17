@@ -19,6 +19,7 @@ import { chaosLevels } from "../replacement-rules.ts";
 import type { Screen } from "../screen.ts";
 import { AiPlayer } from "../ai/ai-player.ts";
 import type {
+  ClockState,
   Color,
   MoveRejection,
   MoveRequest,
@@ -689,6 +690,58 @@ export default class ChessScreen implements Screen {
     this.clockRunning = running;
     this.clockSyncedAt = Date.now();
     this.renderClocks();
+  }
+
+  /**
+   * Replaces the board with the game the server is holding, after this browser
+   * took its seat back. Unlike a move it also restores the clocks, whose move it
+   * is this browser's to make next, and any draw offer still standing.
+   */
+  applyResume(
+    board: SerializedBoardState,
+    clock: ClockState,
+    drawOffers: Color[],
+  ): void {
+    const state = deserializeBoardState(board);
+    this.game.state = state;
+    this.visibleState = state;
+    this.boardView.syncPieces(state.pieces);
+    if (state.lastMove) {
+      this.boardView.setHighlightedMoves(state.lastMove);
+    }
+
+    // Whether this browser's side has already moved is what decides between the
+    // abort button and the resign button, so it is read off the position.
+    const color = this.online?.color;
+    if (
+      color !== undefined &&
+      state.pieces.some((piece) => piece.color === color && piece.hasMoved)
+    ) {
+      this.hasMoved = true;
+      if (this.resignButton) this.resignButton.disabled = false;
+    }
+
+    this.applyClock(clock.white, clock.black, clock.running);
+    this.setDrawOffer(drawOffers);
+    this.updateCheckMarkers(state);
+    this.updateMaterialAdvantage(state);
+    this.updateTurnIndicator();
+    this.renderResignButton();
+    this.arrowsLayer.clear();
+    this.clearSelection();
+    // The connection is back, so anything the board was saying about it is done.
+    if (this.noticeElement) this.noticeElement.hidden = true;
+  }
+
+  /** Shows the draw offers the server holds, as of taking a seat back. */
+  private setDrawOffer(offers: Color[]): void {
+    const color = this.online?.color;
+    this.drawOffer = color !== undefined && offers.includes(color)
+      ? "mine"
+      : offers.length > 0
+      ? "theirs"
+      : "none";
+    this.renderDrawButton();
   }
 
   /**

@@ -16,9 +16,23 @@ import type { SerializedBoardState, SerializedMove } from "./serialization.ts";
  * The wire protocol version. Bumped whenever a message shape changes, or a
  * message gains a value that an older client would read wrongly.
  */
-export const PROTOCOL_VERSION = 4;
+export const PROTOCOL_VERSION = 5;
 
 export type Color = "white" | "black";
+
+/**
+ * The longest player identifier accepted, and the characters one may hold.
+ *
+ * An identifier is opaque to the server: the browser makes one and keeps it, and
+ * the server only ever stores it. The pattern is there to keep anything strange
+ * out of a database key, not to give the identifier a meaning.
+ */
+const playerIdPattern = /^[A-Za-z0-9_-]{1,64}$/;
+
+/** Whether `value` may be used as a player identifier. */
+export function isPlayerId(value: unknown): value is string {
+  return typeof value === "string" && playerIdPattern.test(value);
+}
 
 export type GameOverStatus =
   | "checkmate"
@@ -40,6 +54,13 @@ export type GameResult = {
    */
   winner: Color | "draw" | null;
 };
+
+/** What each clock has left, and whose is running. */
+export interface ClockState {
+  white: number;
+  black: number;
+  running: Color | null;
+}
 
 /** The clocks a game is played with, as the server decided them. */
 export interface TimeControlSpec {
@@ -84,8 +105,24 @@ export type ClientMessage =
    * `timeControl` an index into the time controls; the server may pair the
    * player with anyone up to two steps away on either, since a game one step
    * from each player's request is played at the step in between.
+   *
+   * `playerId` is the identifier this browser keeps for itself; the server
+   * records the player under it, and echoes it back in `matched` so a browser
+   * that had none learns the one it was given.
    */
-  | { type: "join"; complexity: number; timeControl: number; name?: string }
+  | {
+    type: "join";
+    complexity: number;
+    timeControl: number;
+    name?: string;
+    playerId?: string;
+  }
+  /**
+   * Take back a seat at a game that is still running, after a reload or a lost
+   * connection. The seat is the one held for `playerId`; a game nobody is
+   * sitting at is still running until its clocks run out.
+   */
+  | { type: "rejoin"; gameId: string; playerId: string }
   /** Leave the queue without waiting for an opponent. */
   | { type: "cancelQueue" }
   | ({ type: "move" } & MoveRequest)
@@ -125,6 +162,8 @@ export type ServerMessage =
   | {
       type: "matched";
       gameId: string;
+      /** This client's own identifier, which it should keep for a rejoin. */
+      playerId: string;
       /** The colour this client plays. */
       color: Color;
       opponentName: string;
@@ -147,12 +186,38 @@ export type ServerMessage =
       /** Whether the side that must move next is in check. */
       inCheck: boolean;
     }
+  | {
+      type: "resumed";
+      gameId: string;
+      /** This client's own identifier, echoed so it keeps the same one. */
+      playerId: string;
+      /** The colour this client plays. */
+      color: Color;
+      /** The name this client plays under, as the seat was stored. */
+      playerName: string;
+      opponentName: string;
+      complexity: number;
+      complexityLabel: string;
+      timeControl: TimeControlSpec;
+      board: SerializedBoardState;
+      /** What each clock has left right now. */
+      clock: ClockState;
+      /** The sides with a draw offer standing, if any. */
+      drawOffers: Color[];
+    }
   /**
    * What each player's clock has left, and whose is running. Sent after every
    * move and again while a clock runs, so a client that ticked on its own
    * catches up with the server.
    */
-  | { type: "clock"; white: number; black: number; running: Color | null }
+  | ({ type: "clock" } & ClockState)
+  /**
+   * The opponent's connection went away. The game is not over: their clock runs
+   * on, and they can take their seat back until it runs out.
+   */
+  | { type: "opponentAway"; color: Color }
+  /** The opponent came back and is playing again. */
+  | { type: "opponentBack"; color: Color }
   | { type: "moveRejected"; rejection: MoveRejection }
   /**
    * Someone offered a draw. Sent to both players, naming the side that offered,
@@ -165,7 +230,6 @@ export type ServerMessage =
    */
   | { type: "drawCancelled"; color: Color }
   | ({ type: "gameOver" } & GameResult)
-  | { type: "opponentLeft"; winner: Color }
   | { type: "error"; message: string }
   /** Keepalive; answer it with a `pong`. */
   | { type: "ping" };
@@ -176,13 +240,15 @@ const serverMessageTypes = new Set<string>([
   "queued",
   "queueCancelled",
   "matched",
+  "resumed",
   "moved",
   "clock",
   "moveRejected",
   "drawOffered",
   "drawCancelled",
   "gameOver",
-  "opponentLeft",
+  "opponentAway",
+  "opponentBack",
   "error",
   "ping",
 ]);

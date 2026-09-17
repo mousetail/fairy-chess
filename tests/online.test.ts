@@ -3,6 +3,11 @@ import { test } from "node:test";
 import type { ServerMessage } from "../src/online/protocol.ts";
 import { parseServerMessage } from "../src/online/protocol.ts";
 import { MatchmakingClient } from "../src/online/client.ts";
+import { gameHash, gameIdFromHash } from "../src/online/game-link.ts";
+import {
+  type IdentityStore,
+  loadPlayerId,
+} from "../src/online/player-identity.ts";
 import { FakeSocket } from "./fake-socket.ts";
 
 /** A partial screen, for a test that wants to watch or break the messages. */
@@ -74,6 +79,29 @@ test("an unnamed player joins without a name field", () => {
   client.join(0, 2, "   ");
   assert.deepEqual(socket.sent, [
     '{"type":"join","complexity":0,"timeControl":2}',
+  ]);
+});
+
+test("a player joins under the identifier the browser keeps", () => {
+  const socket = new FakeSocket();
+  const { client } = clientOver(socket);
+  socket.emit("open", {});
+
+  client.join(2, 1, "Ada", "player-ada");
+  assert.deepEqual(socket.sent, [
+    '{"type":"join","complexity":2,"timeControl":1,"name":"Ada",' +
+    '"playerId":"player-ada"}',
+  ]);
+});
+
+test("taking a seat back names the game and the player", () => {
+  const socket = new FakeSocket();
+  const { client } = clientOver(socket);
+  socket.emit("open", {});
+
+  client.rejoin("game-7", "player-ada");
+  assert.deepEqual(socket.sent, [
+    '{"type":"rejoin","gameId":"game-7","playerId":"player-ada"}',
   ]);
 });
 
@@ -219,6 +247,10 @@ test("only messages with a type this build knows are accepted", () => {
     "welcome",
   );
   assert.equal(
+    (parseServerMessage('{"type":"resumed"}') as ServerMessage).type,
+    "resumed",
+  );
+  assert.equal(
     parseServerMessage('{"type":"drawOffered","color":"white"}')?.type,
     "drawOffered",
   );
@@ -233,4 +265,37 @@ test("only messages with a type this build knows are accepted", () => {
   assert.equal(parseServerMessage("not json at all"), undefined);
   assert.equal(parseServerMessage(7), undefined);
   assert.equal(parseServerMessage(undefined), undefined);
+});
+
+/** An in-memory stand-in for local storage. */
+class MemoryStore implements IdentityStore {
+  private readonly values = new Map<string, string>();
+  getItem(key: string): string | null {
+    return this.values.get(key) ?? null;
+  }
+  setItem(key: string, value: string): void {
+    this.values.set(key, value);
+  }
+}
+
+test("a player identifier is made once and then kept", () => {
+  const store = new MemoryStore();
+  const first = loadPlayerId(store);
+  assert.ok(first.length > 0);
+  assert.equal(loadPlayerId(store), first);
+
+  // A stored value that is not a usable identifier is replaced rather than used.
+  store.setItem("fairy-chess.playerId", "not a valid id!");
+  const replaced = loadPlayerId(store);
+  assert.notEqual(replaced, "not a valid id!");
+  assert.equal(loadPlayerId(store), replaced);
+});
+
+test("a game link names a game in the address bar", () => {
+  assert.equal(gameIdFromHash("#/game/abc-123"), "abc-123");
+  assert.equal(gameHash("abc-123"), "#/game/abc-123");
+  assert.equal(gameIdFromHash("#/game/"), null);
+  assert.equal(gameIdFromHash("#something-else"), null);
+  assert.equal(gameIdFromHash("#/game/a b"), null);
+  assert.equal(gameIdFromHash(""), null);
 });

@@ -1,4 +1,8 @@
-import type { Color, TimeControlSpec } from "../src/online/protocol.ts";
+import type {
+  ClockState,
+  Color,
+  TimeControlSpec,
+} from "../src/online/protocol.ts";
 
 /**
  * One game's clocks.
@@ -23,28 +27,41 @@ import type { Color, TimeControlSpec } from "../src/online/protocol.ts";
 export const flagGraceMs = 1000;
 
 /** What each side has left, and whose clock is running. */
-export interface ClockSnapshot {
-  white: number;
-  black: number;
+export type ClockSnapshot = ClockState;
+
+/**
+ * Everything needed to build a clock again after the server was restarted. The
+ * running clock is kept as the moment it started rather than as a number of
+ * milliseconds used, so it carries on running across the restart.
+ */
+export interface ClockRecord {
+  /** The time each side had left when the record was taken. */
+  remaining: Record<Color, number>;
+  /** Whether each side has moved yet, and so whether its clock may run. */
+  moved: Record<Color, boolean>;
   running: Color | null;
+  /** The wall-clock moment the running clock started. */
+  startedAt: number;
 }
 
 export class GameClock {
   readonly timeControl: TimeControlSpec;
   private readonly remaining: Record<Color, number>;
-  private readonly moved: Record<Color, boolean> = {
-    white: false,
-    black: false,
-  };
+  private readonly moved: Record<Color, boolean>;
   private running: Color | null = null;
   private startedAt = 0;
 
-  constructor(timeControl: TimeControlSpec) {
+  constructor(timeControl: TimeControlSpec, state?: ClockRecord) {
     this.timeControl = timeControl;
-    this.remaining = {
+    this.remaining = state ? { ...state.remaining } : {
       white: timeControl.initialMs,
       black: timeControl.initialMs,
     };
+    this.moved = state ? { ...state.moved } : { white: false, black: false };
+    if (state) {
+      this.running = state.running;
+      this.startedAt = state.startedAt;
+    }
   }
 
   /** The side whose clock is running, or `null` while none is. */
@@ -96,6 +113,33 @@ export class GameClock {
       black: Math.max(0, this.remainingAt("black", now)),
       running: this.running,
     };
+  }
+
+  /**
+   * Everything needed to build this clock again, including the moment the
+   * running one started, so a clock survives the server being restarted.
+   */
+  state(): ClockRecord {
+    return {
+      remaining: { white: this.remaining.white, black: this.remaining.black },
+      moved: { white: this.moved.white, black: this.moved.black },
+      running: this.running,
+      startedAt: this.startedAt,
+    };
+  }
+
+  /**
+   * Marks `color` as gone: their free first move is over, and their clock runs
+   * once it is their turn to move.
+   *
+   * A player who disconnects has nobody to read the pieces, so the free first
+   * move no longer applies to them. Their clock is what ends a game they never
+   * come back to, exactly as it ends one they stop playing.
+   */
+  absent(color: Color, toMove: Color, now: number): void {
+    this.moved[color] = true;
+    if (toMove !== color || this.running === color) return;
+    this.start(color, now);
   }
 
   /** Starts `color`'s clock, if they have moved and so may be timed. */

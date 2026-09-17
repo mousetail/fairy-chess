@@ -4,7 +4,28 @@ import {
   PROTOCOL_VERSION,
   type ServerMessage,
 } from "../../src/online/protocol.ts";
+import { Lobby } from "../lobby.ts";
 import { type RunningServer, startServer } from "../main.ts";
+import { PostgresPlayerStore } from "../postgres-store.ts";
+import { RedisGameStore } from "../redis-store.ts";
+
+/** The environment value named, or `undefined` where there is no access to it. */
+function environment(name: string): string | undefined {
+  try {
+    return Deno.env.get(name);
+  } catch {
+    // No permission to read the environment, so there is nothing to connect to.
+    return undefined;
+  }
+}
+
+const redisUrl = environment("REDIS_URL");
+const databaseUrl = environment("DATABASE_URL");
+
+/** Waits, so a write the lobby made without waiting for it has landed. */
+function settle(ms = 150): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 /** A websocket client that queues whatever arrives, for a test to await. */
 class TestClient {
@@ -83,6 +104,31 @@ function startLocalServer(): { running: RunningServer; origin: string } {
   const address = running.server.addr;
   if (address.transport !== "tcp") throw new Error("expected a TCP listener");
   return { running, origin: `127.0.0.1:${address.port}` };
+}
+
+/**
+ * Starts a server over the real stores, restoring the games in progress the way
+ * a deployment does. Returns the game store too, so a test can tidy up after.
+ */
+async function startPersistentServer(): Promise<{
+  running: RunningServer;
+  origin: string;
+  games: RedisGameStore;
+}> {
+  const games = await RedisGameStore.open(redisUrl!);
+  const players = await PostgresPlayerStore.open(databaseUrl!);
+  const lobby = new Lobby({ games, players, random: () => 0 });
+  await lobby.restore();
+
+  const running = startServer({
+    port: 0,
+    hostname: "127.0.0.1",
+    heartbeatMs: 0,
+    lobby,
+  });
+  const address = running.server.addr;
+  if (address.transport !== "tcp") throw new Error("expected a TCP listener");
+  return { running, origin: `127.0.0.1:${address.port}`, games };
 }
 
 Deno.test("two clients are matched and play a game over a websocket", async () => {
@@ -166,6 +212,92 @@ Deno.test("two clients are matched and play a game over a websocket", async () =
     const over = await white.next("gameOver");
     assert.equal(over.status, "resign");
     assert.equal(over.winner, "white");
+  } finally {
+    for (const client of clients) client.close();
+    await running.server.shutdown();
+  }
+});
+
+Deno.test("a player can take their seat back by the game's UUID", async () => {
+  const { running, origin } = startLocalServer();
+  const clients: TestClient[] = [];
+
+  try {
+    const first = new TestClient(`ws://${origin}/ws`);
+    const second = new TestClient(`ws://${origin}/ws`);
+    clients.push(first, second);
+    await Promise.all([first.ready, second.ready]);
+    await Promise.all([first.next("welcome"), second.next("welcome")]);
+
+    first.send({
+      type: "join",
+      complexity: 0,
+      timeControl: 0,
+      name: "Ada",
+      playerId: "player-ada",
+    });
+    second.send({
+      type: "join",
+      complexity: 0,
+      timeControl: 0,
+      name: "Bob",
+      playerId: "player-bob",
+    });
+    const [firstMatch, secondMatch] = await Promise.all([
+      first.next("matched"),
+      second.next("matched"),
+    ]);
+    // Each player is told their own identifier, which the browser keeps.
+    assert.equal(firstMatch.playerId, "player-ada");
+    assert.equal(secondMatch.playerId, "player-bob");
+
+    const firstIsWhite = firstMatch.color === "white";
+    const white = firstIsWhite ? first : second;
+    const black = firstIsWhite ? second : first;
+    const whiteMatch = firstIsWhite ? firstMatch : secondMatch;
+    const blackMatch = firstIsWhite ? secondMatch : firstMatch;
+
+    white.send({
+      type: "move",
+      pieceId: 4,
+      from: { x: 4, y: 1 },
+      to: { x: 4, y: 3 },
+    });
+    await white.next("moved");
+    await black.next("moved");
+
+    // White's socket drops. The opponent is told, but the game is not over.
+    white.close();
+    assert.equal((await black.next("opponentAway")).color, whiteMatch.color);
+
+    // A fresh socket takes the seat back by the number the game is known by.
+    const returning = new TestClient(`ws://${origin}/ws`);
+    clients.push(returning);
+    await returning.ready;
+    await returning.next("welcome");
+    returning.send({
+      type: "rejoin",
+      gameId: whiteMatch.gameId,
+      playerId: whiteMatch.playerId,
+    });
+    const resumed = await returning.next("resumed");
+    assert.equal(resumed.gameId, whiteMatch.gameId);
+    assert.equal(resumed.color, whiteMatch.color);
+    assert.equal(resumed.opponentName, "Bob");
+    assert.equal(resumed.playerName, "Ada");
+    assert.equal(resumed.board.turn, "black");
+    assert.equal(resumed.clock.running, null);
+    assert.ok(resumed.clock.white > 60_000, "white's increment survived");
+    assert.equal((await black.next("opponentBack")).color, whiteMatch.color);
+
+    // The game carries on between the two seats, one of them on a new socket.
+    black.send({
+      type: "move",
+      pieceId: 12,
+      from: { x: 4, y: 6 },
+      to: { x: 4, y: 4 },
+    });
+    assert.equal((await returning.next("moved")).color, blackMatch.color);
   } finally {
     for (const client of clients) client.close();
     await running.server.shutdown();
@@ -301,4 +433,101 @@ Deno.test("a game can be called off before either player has moved", async () =>
     for (const client of clients) client.close();
     await running.server.shutdown();
   }
+});
+
+Deno.test({
+  name: "a game survives the server being restarted",
+  ignore: redisUrl === undefined || databaseUrl === undefined,
+  fn: async () => {
+    const clients: TestClient[] = [];
+    const first = await startPersistentServer();
+    let gameId: string | null = null;
+
+    try {
+      const a = new TestClient(`ws://${first.origin}/ws`);
+      const b = new TestClient(`ws://${first.origin}/ws`);
+      clients.push(a, b);
+      await Promise.all([a.ready, b.ready]);
+      await Promise.all([a.next("welcome"), b.next("welcome")]);
+
+      a.send({
+        type: "join",
+        complexity: 0,
+        timeControl: 0,
+        name: "Ada",
+        playerId: "restart-a",
+      });
+      b.send({
+        type: "join",
+        complexity: 0,
+        timeControl: 0,
+        name: "Bob",
+        playerId: "restart-b",
+      });
+      const [aMatch] = await Promise.all([
+        a.next("matched"),
+        b.next("matched"),
+      ]);
+      gameId = aMatch.gameId;
+
+      const white = aMatch.color === "white" ? a : b;
+      const black = aMatch.color === "white" ? b : a;
+      white.send({
+        type: "move",
+        pieceId: 4,
+        from: { x: 4, y: 1 },
+        to: { x: 4, y: 3 },
+      });
+      await white.next("moved");
+      await black.next("moved");
+
+      // Let the write the lobby made without waiting for it reach Redis, then
+      // take the whole process away, as a restart would.
+      await settle();
+      for (const client of clients) client.close();
+      await first.running.server.shutdown();
+
+      // A new server over the same stores restores the game it finds there.
+      const second = await startPersistentServer();
+      try {
+        const again = new TestClient(`ws://${second.origin}/ws`);
+        const opponent = new TestClient(`ws://${second.origin}/ws`);
+        clients.push(again, opponent);
+        await Promise.all([again.ready, opponent.ready]);
+        await Promise.all([again.next("welcome"), opponent.next("welcome")]);
+
+        again.send({
+          type: "rejoin",
+          gameId,
+          playerId: "restart-a",
+        });
+        const resumed = await again.next("resumed");
+        assert.equal(resumed.gameId, gameId);
+        assert.equal(resumed.color, aMatch.color);
+        assert.equal(resumed.board.turn, "black");
+        assert.ok(resumed.clock.white > 60_000, "the move was remembered");
+
+        // The opponent takes their seat too, and the game carries on.
+        opponent.send({
+          type: "rejoin",
+          gameId,
+          playerId: "restart-b",
+        });
+        await opponent.next("resumed");
+        opponent.send({
+          type: "move",
+          pieceId: 12,
+          from: { x: 4, y: 6 },
+          to: { x: 4, y: 4 },
+        });
+        assert.equal((await opponent.next("moved")).pgn, "e5");
+        assert.equal((await again.next("moved")).pgn, "e5");
+      } finally {
+        await second.running.server.shutdown();
+      }
+    } finally {
+      if (gameId !== null) await first.games.remove(gameId);
+      for (const client of clients) client.close();
+    }
+  },
 });
