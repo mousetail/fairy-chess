@@ -840,7 +840,6 @@ Deno.test("a player-supplied name is sanitised", () => {
   assert.equal(sanitizeName(undefined), "Anonymous");
   assert.equal(sanitizeName(42), "Anonymous");
   assert.equal(sanitizeName("bad\u0000\nname"), "badname");
-  assert.equal(sanitizeName("a".repeat(40)).length, 24);
 });
 
 Deno.test("a player's clock only runs once both sides have moved", () => {

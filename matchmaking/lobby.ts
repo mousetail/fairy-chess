@@ -30,8 +30,6 @@ import {
 import {
   type FinishedGame,
   type GameStore,
-  MemoryGameStore,
-  MemoryPlayerStore,
   type PlayerStore,
   type StoredGame,
   type StoredMove,
