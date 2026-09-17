@@ -16,7 +16,9 @@ export function specialMovementToPgn(
   state: ChessBoardState,
 ): string {
   if (m.castling) {
-    return "O-O";
+    // The side matters: without it a PGN cannot say which rook the king went
+    // to, and the move cannot be played back.
+    return m.to.x > m.from.x ? "O-O" : "O-O-O";
   }
   const symbolOf = (type: PieceType) => state.symbols.get(type) ?? type.symbol;
   const sameType = state.pieces.filter(

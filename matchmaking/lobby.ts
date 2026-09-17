@@ -3,6 +3,7 @@ import { serializeMove } from "../src/online/serialization.ts";
 import {
   type ClientMessage,
   type Color,
+  type GameHistory,
   type GameResult,
   isPlayerId,
   type ServerMessage,
@@ -17,7 +18,8 @@ import {
 import { chaosLevels } from "../src/replacement-rules.ts";
 import { GameClock } from "./clock.ts";
 import { GameSession, type MoveRequest } from "./game-session.ts";
-import { movesToPgn } from "./pgn.ts";
+import { movesToPgn, parsePgn } from "./pgn.ts";
+import { replayGame } from "./replay.ts";
 import {
   canMatch,
   chooseComplexity,
@@ -268,11 +270,13 @@ export class Lobby {
 
     const room = this.rooms.get(message.gameId);
     if (!room) {
-      this.fail(client, "That game is no longer running.");
+      // Not running: it may have finished, in which case anyone holding its id
+      // may look at it again.
+      this.review(client, message.gameId, message.playerId);
       return;
     }
 
-    const color = this.colorOfPlayer(room, message.playerId);
+    const color = this.colorOfPlayer(room.seats, message.playerId);
     // The same answer either way, so a stranger cannot learn which identifiers
     // hold a seat at a game they only know the number of.
     if (color === null) {
@@ -594,16 +598,78 @@ export class Lobby {
       board: room.session.serializeBoard(),
       clock: room.clock.snapshot(this.now()),
       drawOffers: [...room.drawOffers],
+      history: this.historyOf(room),
     };
+  }
+
+  /**
+   * A running game from its opening, so a reconnecting client can put its move
+   * log back. A record that cannot be replayed leaves the history empty rather
+   * than keeping the player out of their game.
+   */
+  private historyOf(room: Room): GameHistory {
+    try {
+      return replayGame(room.initialFen, room.session.symbols(), room.moves);
+    } catch (error) {
+      console.error(`Could not rebuild the history of game ${room.id}:`, error);
+      return { initialBoard: room.session.serializeBoard(), moves: [] };
+    }
+  }
+
+  /**
+   * Sends a finished game to someone who asked for it by its id.
+   *
+   * The game is not in the store the running ones live in, so it comes from the
+   * recorded ones: its moves are replayed from the PGN it was stored as, and its
+   * players are named from the rows their identifiers point at.
+   */
+  private review(client: Client, gameId: string, playerId: string): void {
+    this.players.finishedGame(gameId).then((game) => {
+      if (!game) {
+        this.fail(client, "That game is no longer available.");
+        return;
+      }
+
+      let history: GameHistory;
+      try {
+        history = replayGame(game.initialFen, game.symbols, parsePgn(game.pgn));
+      } catch (error) {
+        console.error(`Could not replay the finished game ${game.id}:`, error);
+        this.fail(client, "That game could not be put back together.");
+        return;
+      }
+
+      const color = this.colorOfPlayer(game.seats, playerId);
+      const label = chaosLevels[game.complexity]?.label ?? chaosLevels[0].label;
+      client.send({
+        type: "reviewed",
+        gameId: game.id,
+        color,
+        whiteName: game.seats.white.name,
+        blackName: game.seats.black.name,
+        complexity: game.complexity,
+        complexityLabel: label,
+        timeControl: describeTimeControl(game.timeControl),
+        result: game.result,
+        initialBoard: history.initialBoard,
+        moves: history.moves,
+      });
+    }).catch((error) => {
+      console.error(`Could not look up the finished game ${gameId}:`, error);
+      this.fail(client, "That game could not be loaded.");
+    });
   }
 
   private colorOf(room: Room, clientId: string): Color {
     return room.clients.white?.id === clientId ? "white" : "black";
   }
 
-  private colorOfPlayer(room: Room, playerId: string): Color | null {
-    if (room.seats.white.id === playerId) return "white";
-    if (room.seats.black.id === playerId) return "black";
+  private colorOfPlayer(
+    seats: Record<Color, StoredSeat>,
+    playerId: string,
+  ): Color | null {
+    if (seats.white.id === playerId) return "white";
+    if (seats.black.id === playerId) return "black";
     return null;
   }
 

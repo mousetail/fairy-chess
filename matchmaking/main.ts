@@ -296,11 +296,9 @@ async function openPlayerStore(
   try {
     return await PostgresPlayerStore.open(url);
   } catch (error) {
-    console.error(
-      "Could not reach PostgreSQL, so players will not be stored:",
-      error,
+    throw new Error(
+      "Could not reach PostgreSQL" + error,
     );
-    return undefined;
   }
 }
 

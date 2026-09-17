@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { movesToPgn } from "../pgn.ts";
+import { movesToPgn, parsePgn } from "../pgn.ts";
 
 Deno.test("a move list is written as PGN", () => {
   assert.equal(
@@ -26,4 +26,18 @@ Deno.test("a list that starts with black is written from move one", () => {
     ]),
     "1. e4 e5",
   );
+});
+
+Deno.test("a move list survives being written and read back", () => {
+  const moves = [
+    { color: "white" as const, pgn: "e4" },
+    { color: "black" as const, pgn: "e5" },
+    { color: "white" as const, pgn: "Nf3" },
+    { color: "black" as const, pgn: "O-O-O" },
+  ];
+  assert.deepEqual(parsePgn(movesToPgn(moves)), moves);
+});
+
+Deno.test("an empty move list reads back as nothing", () => {
+  assert.deepEqual(parsePgn(""), []);
 });

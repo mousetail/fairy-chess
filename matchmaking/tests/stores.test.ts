@@ -156,6 +156,21 @@ Deno.test({
       // Recording the same game again must not move the ratings a second time.
       await store.recordGame(game);
       assert.deepEqual(await ratings(client, white, black), after);
+
+      // The game can be looked up by its id, with both players named from the
+      // rows their identifiers point at rather than from the game itself.
+      const stored = await store.finishedGame(game.id);
+      assert.ok(stored, "the finished game should be there");
+      assert.equal(stored.seats.white.name, "Ada");
+      assert.equal(stored.seats.black.name, "Bob");
+      assert.equal(stored.pgn, "1. e4");
+      assert.equal(stored.initialFen, initialFen);
+      assert.deepEqual(stored.symbols, symbols);
+      assert.deepEqual(stored.result, game.result);
+      assert.equal(stored.timeControl, 0);
+
+      // An id that holds no game, or is not even a UUID, is simply no game.
+      assert.equal(await store.finishedGame("no-such-game"), null);
     } finally {
       await client.queryArray`DELETE FROM games WHERE id = ${game.id}`;
       await client

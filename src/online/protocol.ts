@@ -16,9 +16,23 @@ import type { SerializedBoardState, SerializedMove } from "./serialization.ts";
  * The wire protocol version. Bumped whenever a message shape changes, or a
  * message gains a value that an older client would read wrongly.
  */
-export const PROTOCOL_VERSION = 5;
+export const PROTOCOL_VERSION = 6;
 
 export type Color = "white" | "black";
+
+/**
+ * A move as it is replayed: whose it was, how it is written, and the move
+ * itself in the board's own terms.
+ *
+ * A game's moves are stored as a PGN, so replaying one means matching each move
+ * of the list against the board it was played on. That is what this is for: the
+ * result of that matching, which a client can apply without repeating it.
+ */
+export interface SerializedPlay {
+  color: Color;
+  pgn: string;
+  move: SerializedMove;
+}
 
 /**
  * The longest player identifier accepted, and the characters one may hold.
@@ -204,6 +218,35 @@ export type ServerMessage =
       clock: ClockState;
       /** The sides with a draw offer standing, if any. */
       drawOffers: Color[];
+      /**
+       * The game from its opening, so the move log and its positions can be put
+       * back: the position the game started from, and every move played.
+       */
+      history: GameHistory;
+    }
+  /**
+   * A finished game, sent to anyone who asks for it by its id.
+   *
+   * A game that has finished is out of the store the running ones live in, so
+   * it is looked up among the recorded ones instead. Its moves are replayed from
+   * the PGN the record holds, and both players are named from the player rows
+   * their identifiers point at.
+   */
+  | {
+      type: "reviewed";
+      gameId: string;
+      /** The side the viewer played, or `null` when they did not play this game. */
+      color: Color | null;
+      whiteName: string;
+      blackName: string;
+      complexity: number;
+      complexityLabel: string;
+      timeControl: TimeControlSpec;
+      result: GameResult;
+      /** The position the game started from. */
+      initialBoard: SerializedBoardState;
+      /** Every move, in order, ready to be applied to the opening position. */
+      moves: SerializedPlay[];
     }
   /**
    * What each player's clock has left, and whose is running. Sent after every
@@ -234,6 +277,14 @@ export type ServerMessage =
   /** Keepalive; answer it with a `pong`. */
   | { type: "ping" };
 
+/** A game from its opening, so a client can rebuild its history. */
+export interface GameHistory {
+  /** The position the game started from. */
+  initialBoard: SerializedBoardState;
+  /** Every move played so far, in order. */
+  moves: SerializedPlay[];
+}
+
 /** Every `type` a server message can carry, for a cheap first check. */
 const serverMessageTypes = new Set<string>([
   "welcome",
@@ -241,6 +292,7 @@ const serverMessageTypes = new Set<string>([
   "queueCancelled",
   "matched",
   "resumed",
+  "reviewed",
   "moved",
   "clock",
   "moveRejected",

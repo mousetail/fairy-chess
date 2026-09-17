@@ -86,6 +86,11 @@ export interface PlayerStore {
   remember(id: string, name: string): Promise<void>;
   /** Stores a finished game and applies the rating change it earns. */
   recordGame(game: FinishedGame): Promise<void>;
+  /**
+   * The finished game with this id, with both players named, or `null` when
+   * there is no such game. This is how a game is shown again from its link.
+   */
+  finishedGame(id: string): Promise<FinishedGame | null>;
 }
 
 /** A game store that keeps everything in memory, for tests and for a run with none configured. */
@@ -122,5 +127,11 @@ export class MemoryPlayerStore implements PlayerStore {
   recordGame(game: FinishedGame): Promise<void> {
     this.games.push(game);
     return Promise.resolve();
+  }
+
+  finishedGame(id: string): Promise<FinishedGame | null> {
+    return Promise.resolve(
+      this.games.find((game) => game.id === id) ?? null,
+    );
   }
 }

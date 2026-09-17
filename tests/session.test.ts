@@ -5,6 +5,7 @@ import {
   MatchmakingSession,
   type MatchmakingStatus,
   type OnlineGame,
+  type ReviewedGame,
 } from "../src/online/session.ts";
 import {
   PROTOCOL_VERSION,
@@ -25,6 +26,7 @@ function sessionOver(
   const sockets: FakeSocket[] = [];
   const statuses: MatchmakingStatus[] = [];
   const games: OnlineGame[] = [];
+  const reviews: ReviewedGame[] = [];
 
   const session = new MatchmakingSession({
     url: options.url ?? "ws://matchmaking.test/ws",
@@ -37,6 +39,7 @@ function sessionOver(
       return socket as unknown as WebSocket;
     },
     onGame: (game) => games.push(game),
+    onReview: (game) => reviews.push(game),
   });
   session.watch((status) => statuses.push(status));
 
@@ -47,7 +50,7 @@ function sessionOver(
     return latest;
   };
 
-  return { session, socket, sockets, statuses, games };
+  return { session, socket, sockets, statuses, games, reviews };
 }
 
 /** Lets a reconnect, which waits on a timer, have its turn. */
@@ -76,8 +79,10 @@ function recorder(): {
       drawCancelled: (color) => events.push(`drawCancelled:${color}`),
       notice: (text) => events.push(`notice:${text}`),
       resuming: (attempt) => events.push(`resuming:${attempt}`),
-      resumed: (_board, clock, offers) =>
-        events.push(`resumed:${clock.white}:${clock.running}:${offers.length}`),
+      resumed: (_board, clock, offers, history) =>
+        events.push(
+          `resumed:${clock.white}:${clock.running}:${offers.length}:${history.moves.length}`,
+        ),
       disconnected: () => events.push("disconnected"),
     },
   };
@@ -133,6 +138,7 @@ function resumed(
     board: BOARD,
     clock: { white: 120_000, black: 180_000, running: "white" },
     drawOffers: [],
+    history: { initialBoard: BOARD, moves: [] },
     ...overrides,
   };
 }
@@ -360,7 +366,7 @@ test("a game whose connection drops is taken back over a new socket", async () =
   ]);
 
   sockets[1].receive(resumed());
-  assert.deepEqual(events, ["resuming:1", "resumed:120000:white:0"]);
+  assert.deepEqual(events, ["resuming:1", "resumed:120000:white:0:0"]);
   // The same game object is kept, so the board already on screen is updated.
   assert.equal(games.length, 1);
   assert.equal(session.currentGame, games[0]);
@@ -405,6 +411,37 @@ test("a game named in the address bar is rejoined when the page loads", () => {
   assert.equal(game.color, "black");
   assert.equal(game.playerName, "Bob");
   assert.deepEqual(game.clock, { white: 120_000, black: 180_000, running: "white" });
+  assert.deepEqual(session.status, { state: "idle" });
+});
+
+test("a finished game shared by its link is handed over for reading", () => {
+  const { session, socket, reviews } = sessionOver();
+  session.resume("game-9");
+  socket().open();
+
+  socket().receive({
+    type: "reviewed",
+    gameId: "game-9",
+    color: "black",
+    whiteName: "Ada",
+    blackName: "Bob",
+    complexity: 0,
+    complexityLabel: "normal chess",
+    timeControl: TIME_CONTROL,
+    result: { status: "checkmate", winner: "white" },
+    initialBoard: BOARD,
+    moves: [],
+  });
+
+  const review = reviews.at(-1);
+  assert.ok(review, "the game should be handed over to be read");
+  assert.equal(review.gameId, "game-9");
+  assert.equal(review.color, "black");
+  assert.equal(review.whiteName, "Ada");
+  assert.equal(review.blackName, "Bob");
+  assert.equal(review.result.status, "checkmate");
+  // Nothing is being played, so there is no game to hold on to.
+  assert.equal(session.currentGame, null);
   assert.deepEqual(session.status, { state: "idle" });
 });
 

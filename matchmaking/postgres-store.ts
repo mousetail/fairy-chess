@@ -1,4 +1,5 @@
 import { Client } from "@db/postgres";
+import type { Color, GameOverStatus } from "../src/online/protocol.ts";
 import type { FinishedGame, PlayerStore } from "./store.ts";
 import { resultScores, startingRating, updatedRatings } from "./rating.ts";
 
@@ -108,6 +109,61 @@ export class PostgresPlayerStore implements PlayerStore {
     const next = updatedRatings(white, black, scores);
     await this.setRating(game.seats.white.id, next.white);
     await this.setRating(game.seats.black.id, next.black);
+  }
+
+  /**
+   * The finished game with this id, with both players named from their rows.
+   *
+   * The identifier is compared as text, so an id that is not a UUID is simply a
+   * game that is not there rather than an error from the database.
+   */
+  async finishedGame(id: string): Promise<FinishedGame | null> {
+    const { rows } = await this.client.queryObject<{
+      complexity: number;
+      time_control: number;
+      white_id: string;
+      black_id: string;
+      white_name: string | null;
+      black_name: string | null;
+      status: string;
+      winner: string | null;
+      pgn: string;
+      initial_fen: string;
+      symbols: Record<string, string>;
+      started_at: Date;
+      finished_at: Date;
+    }>`
+      SELECT
+        g.complexity, g.time_control, g.white_id, g.black_id,
+        g.status, g.winner, g.pgn, g.initial_fen, g.symbols,
+        g.started_at, g.finished_at,
+        wp.name AS white_name, bp.name AS black_name
+      FROM games g
+      LEFT JOIN players wp ON wp.id = g.white_id
+      LEFT JOIN players bp ON bp.id = g.black_id
+      WHERE g.id::text = ${id}
+    `;
+
+    const row = rows[0];
+    if (!row) return null;
+    return {
+      id,
+      complexity: row.complexity,
+      timeControl: row.time_control,
+      seats: {
+        white: { id: row.white_id, name: row.white_name ?? "" },
+        black: { id: row.black_id, name: row.black_name ?? "" },
+      },
+      result: {
+        status: row.status as GameOverStatus,
+        winner: (row.winner as Color | "draw" | null) ?? null,
+      },
+      pgn: row.pgn,
+      initialFen: row.initial_fen,
+      symbols: row.symbols,
+      startedAt: row.started_at.getTime(),
+      finishedAt: row.finished_at.getTime(),
+    };
   }
 
   private async upsertPlayer(id: string, name: string): Promise<void> {

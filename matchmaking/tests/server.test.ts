@@ -288,6 +288,9 @@ Deno.test("a player can take their seat back by the game's UUID", async () => {
     assert.equal(resumed.board.turn, "black");
     assert.equal(resumed.clock.running, null);
     assert.ok(resumed.clock.white > 60_000, "white's increment survived");
+    // The move log comes back with the seat, so the history is not lost.
+    assert.equal(resumed.history.initialBoard.turn, "white");
+    assert.deepEqual(resumed.history.moves.map((move) => move.pgn), ["e4"]);
     assert.equal((await black.next("opponentBack")).color, whiteMatch.color);
 
     // The game carries on between the two seats, one of them on a new socket.
@@ -298,6 +301,88 @@ Deno.test("a player can take their seat back by the game's UUID", async () => {
       to: { x: 4, y: 4 },
     });
     assert.equal((await returning.next("moved")).color, blackMatch.color);
+  } finally {
+    for (const client of clients) client.close();
+    await running.server.shutdown();
+  }
+});
+
+Deno.test("a finished game can be shared and read by its id", async () => {
+  const { running, origin } = startLocalServer();
+  const clients: TestClient[] = [];
+
+  try {
+    const first = new TestClient(`ws://${origin}/ws`);
+    const second = new TestClient(`ws://${origin}/ws`);
+    clients.push(first, second);
+    await Promise.all([first.ready, second.ready]);
+    await Promise.all([first.next("welcome"), second.next("welcome")]);
+
+    first.send({
+      type: "join",
+      complexity: 0,
+      timeControl: 0,
+      name: "Ada",
+      playerId: "ada",
+    });
+    second.send({
+      type: "join",
+      complexity: 0,
+      timeControl: 0,
+      name: "Bob",
+      playerId: "bob",
+    });
+    const [firstMatch] = await Promise.all([
+      first.next("matched"),
+      second.next("matched"),
+    ]);
+
+    const firstIsWhite = firstMatch.color === "white";
+    const white = firstIsWhite ? first : second;
+    const black = firstIsWhite ? second : first;
+    white.send({
+      type: "move",
+      pieceId: 4,
+      from: { x: 4, y: 1 },
+      to: { x: 4, y: 3 },
+    });
+    await white.next("moved");
+    await black.next("moved");
+    black.send({ type: "resign" });
+    await Promise.all([white.next("gameOver"), black.next("gameOver")]);
+
+    // The link that is shared names the game, and anyone holding it can read it.
+    const visitor = new TestClient(`ws://${origin}/ws`);
+    clients.push(visitor);
+    await visitor.ready;
+    await visitor.next("welcome");
+    visitor.send({
+      type: "rejoin",
+      gameId: firstMatch.gameId,
+      playerId: "someone-else",
+    });
+
+    const reviewed = await visitor.next("reviewed");
+    assert.equal(reviewed.gameId, firstMatch.gameId);
+    assert.equal(reviewed.color, null, "the visitor played neither side");
+    assert.equal(reviewed.whiteName, "Ada");
+    assert.equal(reviewed.blackName, "Bob");
+    assert.equal(reviewed.result.status, "resign");
+    assert.equal(reviewed.result.winner, "white");
+    assert.equal(reviewed.initialBoard.turn, "white");
+    assert.deepEqual(reviewed.moves.map((move) => move.pgn), ["e4"]);
+
+    // A player of the game is told which side they had.
+    const player = new TestClient(`ws://${origin}/ws`);
+    clients.push(player);
+    await player.ready;
+    await player.next("welcome");
+    player.send({
+      type: "rejoin",
+      gameId: firstMatch.gameId,
+      playerId: firstMatch.color === "white" ? "ada" : "bob",
+    });
+    assert.equal((await player.next("reviewed")).color, firstMatch.color);
   } finally {
     for (const client of clients) client.close();
     await running.server.shutdown();

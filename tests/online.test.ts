@@ -292,10 +292,12 @@ test("a player identifier is made once and then kept", () => {
 });
 
 test("a game link names a game in the address bar", () => {
+  assert.equal(gameIdFromHash("#abc-123"), "abc-123");
+  assert.equal(gameHash("abc-123"), "#abc-123");
+  // A link an older build wrote is still read.
   assert.equal(gameIdFromHash("#/game/abc-123"), "abc-123");
-  assert.equal(gameHash("abc-123"), "#/game/abc-123");
   assert.equal(gameIdFromHash("#/game/"), null);
-  assert.equal(gameIdFromHash("#something-else"), null);
-  assert.equal(gameIdFromHash("#/game/a b"), null);
+  assert.equal(gameIdFromHash("#something else"), null);
+  assert.equal(gameIdFromHash("#"), null);
   assert.equal(gameIdFromHash(""), null);
 });

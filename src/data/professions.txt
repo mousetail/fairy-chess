@@ -1,0 +1,774 @@
+AI engineer
+Accessory designer
+Acoustic Engineer
+Acrobat
+Actor
+Actuary
+Agricultural Engineer
+Algorithm developer
+Algorithm engineer
+Anesthesiologist
+Anesthesiologist Assistant
+Anesthesiology Fellow
+Animator
+Anthropologist
+Application software developer
+Arborist
+Archeologist
+Archimime
+Architect
+Armored Truck Driver
+Art administrator
+Art director
+Art therapist
+Artisan
+Artistic director
+Arts administration
+Assistant Stage Manager
+Associate instructor
+Astronaut
+Athlete
+Athletic Trainer
+Audio Engineer
+Author
+Auto mechanic
+Autorack Loader
+Back-end developer
+Backup dancer
+Baker
+Ballet dancer
+Ballet historian
+Ballet master
+Bariatric Surgeon
+Barker
+Baseball player
+Basketball player
+Bear-leader
+Beatboxer
+Bicycle Messenger
+Biochemist
+Bioinformaticist
+Bioinformatics programmer
+Bioinstrumentationist
+Biologist
+Biomaterial Engineer
+Biomaterialist
+Biomolecular engineer
+Blacksmith
+Blogger
+Boatswain
+Bobbin boy
+Boilermaker
+Book coach
+Bookbinder
+Botanist
+Bouffon
+Boxer
+Brand identity developer
+Broadcast Engineer
+Bug bounty hunter
+Build engineer
+Bursar
+Bus Driver
+Bye-Fellow
+CT Radiographer
+Cabinet maker
+Call boy
+Caller (dance)
+Captain
+Cardiac Scientist
+Cardiac Surgeon
+Cardiologist
+Cardiology Fellow
+Cardiothoracic surgeon
+Cardiovascular Technologist
+Carpenter
+Carpenter (theatre)
+Carpet layer
+Cartoonist
+Casting director
+Caulker
+Ceramics artist
+Certified Registered Nurse Anesthetist
+Chancellor
+Character actor
+Charge artist
+Chatbot developer
+Chauffeur
+Cheerleader
+Chef
+Chemical Engineer
+Chemical engineer
+Chemist
+Chief Mate
+Chief administrative officer
+Chief analytics officer
+Chief brand officer
+Chief business development officer
+Chief business officer
+Chief commercial officer
+Chief communications officer
+Chief compliance officer
+Chief content officer
+Chief creative officer
+Chief customer officer
+Chief data officer
+Chief design officer
+Chief digital officer
+Chief diversity officer
+Chief executive officer
+Chief experience officer
+Chief financial officer
+Chief gaming officer
+Chief genealogical officer
+Chief human resources officer
+Chief information officer
+Chief information officer (higher education)
+Chief information security officer
+Chief innovation officer
+Chief investment officer
+Chief knowledge officer
+Chief learning officer
+Chief legal officer
+Chief marketing officer
+Chief operating officer
+Chief people officer
+Chief privacy officer
+Chief process officer
+Chief product officer
+Chief reputation officer
+Chief research officer
+Chief restructuring officer
+Chief revenue officer
+Chief risk officer
+Chief scientific officer
+Chief security officer
+Chief services officer
+Chief solutions officer
+Chief strategy officer
+Chief supply chain officer
+Chief sustainability officer
+Chief technical officer
+Chief technology officer
+Chief technology security officer
+Chief visibility officer
+Chief visionary officer
+Chief web officer
+Chiropodist
+Chiropractor
+Choreographer
+Cinematographer
+Circus performer
+Civil Engineer
+Cladder
+Clinical Engineer
+Clown
+Club Hostess/Host
+Coach
+Colorist
+Comedian
+Commissioning editor
+Community Health Worker
+Company Manager
+Company management
+Compiler engineer
+Composer
+Computational Scientist
+Computational linguist
+Computer Scientist
+Computer engineer
+Computer programmer
+Computer scientist
+Concept Artist
+Conductor
+Construction worker
+Cook
+Copy editor
+Cordwainer
+Corrosion Engineer
+Corrosion engineer
+Corsetier
+Costume Shop Manager
+Costume designer
+Courier
+Craftsperson
+Crane operator
+Creative consultant
+Cricket player
+Critical Care Nurse Practitioner
+Critical Care Registered Nurse
+Critical Care Respiratory Therapist
+Crossing guard
+Cryptanalyst
+Cryptographer
+Curator
+Customs Broker
+Cyber Warware Operator
+Cyclist
+DJ
+Damascener
+Data cleansing specialist
+Data engineer
+Database administrator
+Deck Cadet
+Deck Officer
+Deep learning engineer
+Delivery Driver
+Demi-soloist
+Dental Assistant
+Dental Hygienist
+Dental Technician
+Dentist
+Denturist
+Deputy Head Teacher
+Dermatologist
+Derrickhand
+Design director
+Design strategist
+DevOps engineer
+Device driver developer
+Dietitian
+Director
+Director of Development
+Director of Production
+Director of audience services
+Director of special events
+Dispatcher
+Dockworker
+Doctor of Podiatric Medicine
+Dog Trainer
+Drag king
+Drag queen
+Draper
+Dredger
+Dresser
+Dressmaker
+Driller (oil)
+Drilling engineer
+Drywall installer
+Ecologist
+Economist
+Electrician
+Electrician (theatre)
+Electrochemical Engineer
+Electronic Engineer
+Elevator mechanic
+Embedded software developer
+Embroiderer
+Emcee
+Emergency Medical Technician
+Emergency Nurse Practitioner
+Emergency physician
+Endocrinologist
+Energy Engineer
+Entrapeneur
+Environmental Engineer
+Environmental Health Officer
+Environmental engineer
+Epidemiologist
+Essayist
+Event planner
+Exam invigilator
+Executive head teacher
+Executive producer
+Exotic dancer
+Explosives Engineer
+Factory worker
+Family nurse practitioner
+Fashion designer
+Fashion model
+Feller
+Fellow
+Fencer
+Fight Director
+Filling station attendant
+Film director
+Film producer
+Fine artist
+Firmware engineer
+First Mate
+Flair bartender
+Flatulist
+Flight Nurse
+Flight attendant
+Flight dispatcher
+Flight engineer
+Flight-Controller
+Floral designer
+Fly crew
+Foley artist
+Football player
+Foreman
+Forensic Engineer
+Forensic Scientist
+Forester
+Forklift Operator
+Founder
+Framer
+Freelancer
+Freight forwarder
+Front of House Manager
+Front-end developer
+Full-stack developer
+Game designer
+Game engine programmer
+Game scripter
+Gameplay programmer
+Gastroenterologist
+Geisha
+General Doctor
+General practitioner
+Geneticist
+Geographer
+Geotechnical Engineer
+Geriatrician
+Gerontological Nurse Practitioner
+Ghostwriter
+Glazier
+Glover
+Golfer
+Governess
+Graphic designer
+Griot
+Gunner
+Gymnast
+Gynaecologist
+HVAC Technician
+Hack writer
+Haematologist
+Hair and wig designer
+Hairstylist
+Harlequin
+Hatter
+Head teacher
+Healthcare chaplain
+Heavy equipment operator
+Helicopter Pilot
+Herpologist
+High master
+Historian
+Hockey player
+Housemaster
+Hydrologist
+Illusionist
+Illustrator
+Immunologist
+Independent software developer
+Industrial Engineer
+Infopreneur
+Information security analyst
+Intensivist
+Interior designer
+Internist
+Interventional Radiographer
+Intimacy Coordinator
+Intimacy director
+Inventor
+Investigative Journalist
+Ironworker
+Itinerant poet
+Janitor
+Japanese idol
+Jester
+Jeweler
+Jewellery designer
+Joiner
+Journalist
+Kernel developer
+Knitter
+Kobzar
+Laborer
+Lactation consultant
+Landman (oil worker)
+Large language model developer
+Layout Artist
+Leatherworker
+Lecturer
+Leutenant
+Light Board Operator
+Light board operator
+Lighting designer
+Lighting technician
+Linguist
+Lirnyk
+Literary Manager
+Literary editor
+Loadmaster
+Locomotive Engineer
+Logistician
+Logistics Officer
+Longshoreman
+Lunch Lady
+Lyricist
+Machine learning engineer
+Machinist
+Magician
+Mail Carrier
+Maintenance programmer
+Maintenance worker
+Majorette (dancer)
+Make up artist
+Make-up artist
+Malware analyst
+Mammographer
+Manufacturing Engineer
+Marathon runner
+Marine Engineer
+Marine designer
+Marketing Director
+Marquetarian
+Martial artist
+Master electrician
+Master of ceremonies
+Material Handler
+Materials Engineer
+Mathematician
+Mechanic
+Mechanical Engineer
+Mechatronics Engineer
+Media designer
+Medical Dosimetry Technologist
+Medical Laboratory Technician
+Medical Officer of Health
+Medical Photographer
+Medical Physicist
+Medical education manager
+Medical writing
+Mental Health Counselor
+Mental Health Nurse Practitioner
+Microbiologist
+Midwife
+Miller
+Milliner
+Millwright
+Mime
+Miner
+Minstrel
+Miomechanist
+Mobile app developer
+Modelmaker
+Moldmaker
+Molecular Engineer
+Monologist
+Motorman
+Movement Director
+Mud engineer
+Mud logging technician
+Municipal Engineer
+Music Director
+Music director
+Musician
+Nanotechnology Engineer
+Natural language processing engineer
+Naturalist
+Neonatal Nurse Practitioner
+Neonatologist
+Nephrologist
+Neural Engineer
+Neurologist
+Neuroradiographer
+Neuroscientist
+Neurosurgeon
+News presenter
+Novelist
+Nuclear Engineer
+Nurse-Midwife
+Nursing Assistant
+Obstetrician
+Occupational Therapist
+Occupational Therapist- Low Vision Rehab
+Occupational Therapist- Neonatal/ Pediatric
+Occupational Therapy Assistant
+Oceanographer
+Offshore geotechnical engineer
+Offshore installation manager
+Oil platform crew
+Oil terminal operator
+Oiler
+Olympic athlete
+Oncologist
+Ophthalmologist
+Optical Engineer
+Optometrist
+Order Picker
+Orthopaedic Physician´s Assistant
+Otolaryngologist
+Overhead Crane Operator
+Package Delivery Driver
+Painters
+Paleontologist
+Panel beater
+Pantomime dame
+Parachute rigger
+Partner
+Party princess
+Pathologist
+Patternmaker
+Pediatric Nurse
+Pediatric Nurse Practitioner
+Pediatric Physician Assistant
+Pediatric Respiratory Therapist
+Pediatrician
+Penciller
+Penetration tester
+Petrochemist
+Petroleum Engineer
+Petroleum engineer
+Petroleum geologist
+Petroleum production engineering
+Petroleum technician
+Petrophysicist
+Pewterer
+Pharmaceutical Engineer
+Pharmacist
+Pharmacy technician
+Phlebotomist
+Photographer
+Photojournalist
+Physical Therapist
+Physical Therapy Assistant
+Physician
+Physician Assistant
+Physician assistant
+Physicist
+Physics engine programmer
+Pile driver
+Pilot
+Pipefitter
+Pipelayer
+Pipeline operator
+Plant operator
+Platform engineer
+Playbill writer
+Playwright
+Plumber
+Podcaster
+Podiatric Surgeon
+Podiatrist
+Poet
+Political Scientist
+Politician
+Polygraph (author)
+Postal Clerk
+Potter
+Power Engineer
+President (corporate title)
+Primary care physician
+Principal dancer
+Process Engineer
+Process engineer
+Producer
+Production designer
+Production engineer
+Production manager
+Professional athlete
+Professional wrestler
+Programmer analyst
+Promotional model
+Prompt engineer
+Property master
+Psychiatric Nurse Practitioner
+Psychiatrist
+Psychologist
+Public Health Nurse
+Public Relations Director
+Publicist
+Pulmonologist
+Pumpman
+Purchasing Manager
+Pushback Operator
+Pyrotechnician
+Quantum Engineer
+Quantum algorithm developer
+Quantum software engineer
+Quilter
+RAG engineer
+Radio personality
+Radiographer
+Radiologist
+Radiologist Practitioner Assistant
+Radiotherapist
+Railroad Crane Operator
+Rapper
+Reach stacker operator
+Reader
+Registered Nurse
+Registered Respiratory Therapist
+Research software engineer
+Reservoir engineer
+Reverse engineer
+Rhapsode
+Rideshare Driver
+Rigger
+Ring girl
+Ringmaster
+Robotics software engineer
+Roughneck
+Roustabout
+Rugby player
+Running crew
+Répétiteur
+Sailmaker
+Sawfiler
+Scenic artist
+Scenic designer
+Scenographer
+Scientific programmer
+Scientist
+Scop
+Screenwriter
+Scribe
+Script coordinator
+Script doctor
+Scrivener
+Sculptor
+Seaman
+Seamstress
+Second Mate
+Security engineer
+Security researcher
+Seismic data analyst
+Server
+Set decorator
+Set designer
+Set dresser
+Sheet metal worker
+Ship broker
+Shipfitter
+Shoemaker
+Shop foreman
+Showgirl
+Showman
+Showrunner
+Singer
+Site reliability engineer
+Skier
+Skomorokh
+Smith
+Soccer player
+Social Worker
+Social media personality
+Sociologist
+Software Engineer
+Software architect
+Software developer
+Software documentation writer
+Software engineer
+Software porting engineer
+Software quality assurance analyst
+Software tester
+Soldier
+Songwriter
+Sonographer
+Sound Technician (A1)
+Sound Technician (A2)
+Sound designer
+Sound engineer
+Sound operator
+Sound programmer
+Speech Language Pathologist
+Speechwriter
+Sports Engineer
+Spotlight Operator
+Spotlight operator
+Staff writer
+Stage manager
+Stagehand
+Stagehands
+Station Master
+Statistician
+Streamer
+Street performer
+Strongman
+Structural Engineer
+Stunt coordinator
+Stunt performer
+Stylist
+Subsurface engineer
+Supply Chain Manager
+Surveying
+Swimmer
+Switch Operator
+Systems analyst
+Systems programmer
+Tailor
+Tank truck driver
+Tattoo artist
+Taxi Driver
+Taxidermist
+Technical Director
+Technical crew
+Technical director
+Technical writer
+Television director
+Television presenter
+Television producer
+Television program creator
+Tennis player
+Test automation engineer
+Textile Engineer
+Theater manager
+Theatre practitioner
+Theatrical Technician
+Theatrical technician
+Thermal Engineer
+Ticketing agent
+TikToker
+Tool pusher
+Track and field athlete
+Traffic police officer
+Train Dispatcher
+Transportation Engineer
+Triathlete
+Truck Driver
+Tugboat Operator
+Upholsterer
+Urban Engineer
+Urban Planner
+Urologist
+Usher
+Variety show
+Vedette
+Veterinarian
+Video design
+Video editor
+Video game designer
+Video game programmer
+Voice actor
+Volleyball player
+Wardrobe Crew
+Wardrobe supervisor
+Warehouse Worker
+Weatherman/woman
+Web designer
+Web developer
+Website content writer
+Wedding planner
+Weigh Station Operator
+Welder
+Well logging technician
+White-hat hacker
+Wiper
+Women's Health Nurse Practitioner
+Wrestler
+Writer
+Yard Spotter
+Yard spotter
+Yardmaster
+Yoga Instructor
+YouTuber
+Zoologist
+paraprofessional educator
+preschool teacher
+principal
+principal teacher
+professor
+program director
+school counselor
+school nurse
+school psychological examiner
+substitute teacher
+teacher
+teaching assistant
+tutor
+vice-principal

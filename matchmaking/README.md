@@ -166,10 +166,20 @@ has already moved.
 ## Games that outlive a connection
 
 Every game is given a UUID when it starts, and the browser puts it in the
-address bar as `#/game/<uuid>`. Reloading that page asks the server for the seat
-back, so a player who accidentally closes the tab, or whose connection drops,
-returns to the position they were looking at. The same UUID is the key the game
-is stored under while it is running.
+address bar as `#<uuid>`. Reloading that page asks the server for the seat back,
+so a player who accidentally closes the tab, or whose connection drops, returns
+to the position they were looking at — and to the move log, which comes with the
+`resumed` as the game from its opening. The same UUID is the key the game is
+stored under while it is running.
+
+The UUID stays in the address bar after the game ends, so the link is the game:
+opening `#<uuid>` for a finished game shows it again, with its moves to step
+through and its result. Nothing is looked up by anything but that id — a link is
+the whole of what it takes to read a game, and a game that is still running
+cannot be read by anyone who does not hold a seat at it. The moves are put back
+by replaying the stored PGN against the stored FEN, which is what the alias map
+is for: a move names its piece by the symbol it was written with, not by a
+letter every piece could share.
 
 Each browser also makes itself an identifier the first time it plays online and
 keeps it in local storage under `fairy-chess.playerId`. It is sent with a `join`
@@ -193,9 +203,10 @@ written to PostgreSQL instead, with the moves as a PGN, the position the game
 started from as a FEN, and the alias map that names the pieces in both. A chaos
 layout is laid out at random, so the starting position cannot be worked out from
 the game's settings, and a board has more piece types than the alphabet has free
-letters, so the symbols they were written with have to be kept beside them.
-**Nothing that is stored is sent back to a client**: the finished-game log is
-not shown anywhere yet.
+letters, so the symbols they were written with have to be kept beside them. A
+finished game is sent to whoever holds its id, which is what a shared link
+shows; an unfinished game is only readable by the two players, and a rating is
+never sent to anyone.
 
 Players are stored in PostgreSQL too, and both ratings are moved by the result
 of each finished game — a plain ELO, 1200 to start with, a win against an equal
@@ -211,40 +222,41 @@ this server knows about, so a client can adapt rather than guess.
 
 ### Client → server
 
-| Message       | Fields                                                                            | Meaning                                                                                                                                                                                        |
-| ------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `join`        | `complexity: number`, `timeControl: number`, `name?: string`, `playerId?: string` | Ask to be matched. Re-sending it while waiting updates the preference without losing your place. `playerId` is the identifier this browser plays under; one is made for it when it sends none. |
-| `rejoin`      | `gameId: string`, `playerId: string`                                              | Take back the seat held for `playerId` at the game named by `gameId`. Answered with `resumed`, or an `error` when the game has finished or the identifier holds no seat in it.                 |
-| `cancelQueue` | —                                                                                 | Leave the queue. Answered with `queueCancelled`.                                                                                                                                               |
-| `move`        | `pieceId: number`, `from: {x, y}`, `to: {x, y}`, `promotion?: string`             | Ask to play a move. `promotion` is a piece type key from the registry in `../src/pieces/piece_types`.                                                                                          |
-| `resign`      | —                                                                                 | End the game in your opponent's favour.                                                                                                                                                        |
-| `abort`       | —                                                                                 | Call the game off. Only allowed before you have moved; ends it with no result.                                                                                                                 |
-| `offerDraw`   | —                                                                                 | Offer a draw, or accept the one the opponent offered. A move clears the offers.                                                                                                                |
-| `cancelDraw`  | —                                                                                 | Take back a draw offer you made. A move clears the offers anyway.                                                                                                                              |
-| `pong`        | —                                                                                 | Answers the server's keepalive.                                                                                                                                                                |
+| Message       | Fields                                                                            | Meaning                                                                                                                                                                                                                                                     |
+| ------------- | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `join`        | `complexity: number`, `timeControl: number`, `name?: string`, `playerId?: string` | Ask to be matched. Re-sending it while waiting updates the preference without losing your place. `playerId` is the identifier this browser plays under; one is made for it when it sends none.                                                              |
+| `rejoin`      | `gameId: string`, `playerId: string`                                              | Take back the seat held for `playerId` at the game named by `gameId`. Answered with `resumed` for a game still running, `reviewed` for one that has finished, or an `error` when the id holds no game or the identifier holds no seat in one still running. |
+| `cancelQueue` | —                                                                                 | Leave the queue. Answered with `queueCancelled`.                                                                                                                                                                                                            |
+| `move`        | `pieceId: number`, `from: {x, y}`, `to: {x, y}`, `promotion?: string`             | Ask to play a move. `promotion` is a piece type key from the registry in `../src/pieces/piece_types`.                                                                                                                                                       |
+| `resign`      | —                                                                                 | End the game in your opponent's favour.                                                                                                                                                                                                                     |
+| `abort`       | —                                                                                 | Call the game off. Only allowed before you have moved; ends it with no result.                                                                                                                                                                              |
+| `offerDraw`   | —                                                                                 | Offer a draw, or accept the one the opponent offered. A move clears the offers.                                                                                                                                                                             |
+| `cancelDraw`  | —                                                                                 | Take back a draw offer you made. A move clears the offers anyway.                                                                                                                                                                                           |
+| `pong`        | —                                                                                 | Answers the server's keepalive.                                                                                                                                                                                                                             |
 
 Squares are zero-based board coordinates, matching `Tile` in
 `../src/chess-tile.ts`: `a1` is `{x: 0, y: 0}` and `h8` is `{x: 7, y: 7}`.
 
 ### Server → client
 
-| Message          | Fields                                                                                                                                      | Meaning                                                                                                                                                                                                                                         |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `welcome`        | `protocolVersion`, `minComplexity`, `maxComplexity`, `complexityLabels: string[]`, `timeControlLabels: string[]`                            | Sent once on connection.                                                                                                                                                                                                                        |
-| `queued`         | `complexity`, `timeControl`, `waiting`                                                                                                      | You are in the queue, and this many players are in it.                                                                                                                                                                                          |
-| `queueCancelled` | —                                                                                                                                           | You left the queue.                                                                                                                                                                                                                             |
-| `matched`        | `gameId`, `playerId`, `color`, `opponentName`, `complexity`, `complexityLabel`, `timeControl`, `board`                                      | A game has started. `gameId` is the game's UUID; `playerId` is this client's own identifier, which it should keep. `board` is the starting position the server laid out; `timeControl` carries `index`, `label`, `initialMs` and `incrementMs`. |
-| `resumed`        | `gameId`, `playerId`, `color`, `playerName`, `opponentName`, `complexity`, `complexityLabel`, `timeControl`, `board`, `clock`, `drawOffers` | A seat was taken back at a game already running. `board` is the position now, `clock` is what each clock has left now, and `drawOffers` names any side whose offer still stands.                                                                |
-| `moved`          | `color`, `move`, `pgn`, `board`, `inCheck`                                                                                                  | A move was accepted and applied. `board` is the position after it; `inCheck` says whether the side that must move next is in check.                                                                                                             |
-| `clock`          | `white`, `black`, `running`                                                                                                                 | What each clock has left in milliseconds, and whose is running (`"white"`, `"black"` or `null`). Sent after every move and again while a clock runs.                                                                                            |
-| `moveRejected`   | `rejection`                                                                                                                                 | Your move was refused; see the reasons below.                                                                                                                                                                                                   |
-| `drawOffered`    | `color`                                                                                                                                     | Someone offered a draw. Sent to both players, naming the side that offered. It stands until a move is played or the offerer takes it back.                                                                                                      |
-| `drawCancelled`  | `color`                                                                                                                                     | Someone took their draw offer back. Sent to both players, naming the side that did.                                                                                                                                                             |
-| `gameOver`       | `status`, `winner`                                                                                                                          | The game ended: `checkmate`, `stalemate`, `repetition`, `resign`, `draw`, `timeout` or `abort`, and who won (`"white"`, `"black"`, `"draw"`, or `null` for an abort).                                                                           |
-| `opponentAway`   | `color`                                                                                                                                     | The opponent's connection dropped. The game is not over: their clock runs on, and they can take the seat back.                                                                                                                                  |
-| `opponentBack`   | `color`                                                                                                                                     | The opponent took their seat back and is playing again.                                                                                                                                                                                         |
-| `error`          | `message`                                                                                                                                   | A message could not be understood, or arrived at the wrong moment. The socket stays open.                                                                                                                                                       |
-| `ping`           | —                                                                                                                                           | Keepalive; answer with `pong`.                                                                                                                                                                                                                  |
+| Message          | Fields                                                                                                                                                 | Meaning                                                                                                                                                                                                                                                                                   |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `welcome`        | `protocolVersion`, `minComplexity`, `maxComplexity`, `complexityLabels: string[]`, `timeControlLabels: string[]`                                       | Sent once on connection.                                                                                                                                                                                                                                                                  |
+| `queued`         | `complexity`, `timeControl`, `waiting`                                                                                                                 | You are in the queue, and this many players are in it.                                                                                                                                                                                                                                    |
+| `queueCancelled` | —                                                                                                                                                      | You left the queue.                                                                                                                                                                                                                                                                       |
+| `matched`        | `gameId`, `playerId`, `color`, `opponentName`, `complexity`, `complexityLabel`, `timeControl`, `board`                                                 | A game has started. `gameId` is the game's UUID; `playerId` is this client's own identifier, which it should keep. `board` is the starting position the server laid out; `timeControl` carries `index`, `label`, `initialMs` and `incrementMs`.                                           |
+| `resumed`        | `gameId`, `playerId`, `color`, `playerName`, `opponentName`, `complexity`, `complexityLabel`, `timeControl`, `board`, `clock`, `drawOffers`, `history` | A seat was taken back at a game already running. `board` is the position now, `clock` is what each clock has left now, `drawOffers` names any side whose offer still stands, and `history` is the game from its opening (`initialBoard` and every move), so the move log can be put back. |
+| `reviewed`       | `gameId`, `color`, `whiteName`, `blackName`, `complexity`, `complexityLabel`, `timeControl`, `result`, `initialBoard`, `moves`                         | A finished game, asked for by its id. `color` is the side the reader played, or `null` when they played neither. `moves` holds every move, which a client applies to `initialBoard` to rebuild the game.                                                                                  |
+| `moved`          | `color`, `move`, `pgn`, `board`, `inCheck`                                                                                                             | A move was accepted and applied. `board` is the position after it; `inCheck` says whether the side that must move next is in check.                                                                                                                                                       |
+| `clock`          | `white`, `black`, `running`                                                                                                                            | What each clock has left in milliseconds, and whose is running (`"white"`, `"black"` or `null`). Sent after every move and again while a clock runs.                                                                                                                                      |
+| `moveRejected`   | `rejection`                                                                                                                                            | Your move was refused; see the reasons below.                                                                                                                                                                                                                                             |
+| `drawOffered`    | `color`                                                                                                                                                | Someone offered a draw. Sent to both players, naming the side that offered. It stands until a move is played or the offerer takes it back.                                                                                                                                                |
+| `drawCancelled`  | `color`                                                                                                                                                | Someone took their draw offer back. Sent to both players, naming the side that did.                                                                                                                                                                                                       |
+| `gameOver`       | `status`, `winner`                                                                                                                                     | The game ended: `checkmate`, `stalemate`, `repetition`, `resign`, `draw`, `timeout` or `abort`, and who won (`"white"`, `"black"`, `"draw"`, or `null` for an abort).                                                                                                                     |
+| `opponentAway`   | `color`                                                                                                                                                | The opponent's connection dropped. The game is not over: their clock runs on, and they can take the seat back.                                                                                                                                                                            |
+| `opponentBack`   | `color`                                                                                                                                                | The opponent took their seat back and is playing again.                                                                                                                                                                                                                                   |
+| `error`          | `message`                                                                                                                                              | A message could not be understood, or arrived at the wrong moment. The socket stays open.                                                                                                                                                                                                 |
+| `ping`           | —                                                                                                                                                      | Keepalive; answer with `pong`.                                                                                                                                                                                                                                                            |
 
 A `moveRejected` carries one of `game-over`, `not-your-turn`, `unknown-piece`,
 `not-your-piece`, `stale-position`, `illegal-move`, or `promotion-required`
@@ -283,7 +295,7 @@ game in the browser ends the same way, since both play by the same rules.
 // server, to both players
 {"type":"moved","color":"white","move":{…},"pgn":"e4","board":{…},"inCheck":false}
 {"type":"clock","white":182000,"black":180000,"running":null}
-// a page reloaded on #/game/8b0e2f5a-… asks for the seat back
+// a page reloaded on #8b0e2f5a-… asks for the seat back
 {"type":"rejoin","gameId":"8b0e2f5a-0f0e-4a4e-9d5e-2f1f0a7c3b9d","playerId":"9f1c…"}
 ```
 
@@ -346,16 +358,18 @@ docker compose down
 ```
 
 With both set, the suite also plays a game, restarts the server over the same
-stores, and rejoins the game to carry it on. The lobby's own tests use an
-in-memory stand-in, so they need no server at all.
+stores, and rejoins the game to carry it on. A finished game is asked for by its
+id and replayed, and a game is read back from the FEN and PGN it is stored as at
+every kind of layout. The lobby's own tests use an in-memory stand-in, so they
+need no server at all.
 
 If your machine routes traffic through a proxy (`HTTP_PROXY` and friends) and
 does not exempt localhost, set `NO_PROXY=127.0.0.1,localhost` for the test run.
 
 The browser half is tested by the repository's `npm test`, which covers the
 message parser, the socket's behaviour against a stand-in, the session that owns
-the search and takes seats back, the stored settings, the player identifier, the
-game link, and the URL fallback.
+the search, takes seats back and hands finished games over to be read, the
+stored settings, the player identifier, the game link, and the URL fallback.
 
 ## Type checking
 

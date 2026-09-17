@@ -43,6 +43,22 @@ export interface HomeScreenOptions {
   onLocalGame(options: ChessScreenOptions): void;
 }
 
+async function getRandomName() {
+  const professions = (await import('./data/professions.txt?raw')).default.split('\n');
+  const adjectives = (await import('./data/adjectives.txt?raw')).default.split('\n');
+  const profession = professions[Math.floor(Math.random() * professions.length)].toLocaleLowerCase();
+  if (profession.length < 24) {
+    const adjective = adjectives[Math.floor(Math.random() * adjectives.length)].toLocaleLowerCase();
+    if (!profession.startsWith(adjective)) {
+      return `${adjective} ${profession}`;
+    } else {
+      return profession;
+    }
+  } else {
+    return profession;
+  }
+}
+
 export class HomeScreen implements Screen {
   private readonly matchmaking: MatchmakingSession;
   private readonly options: HomeScreenOptions;
@@ -149,10 +165,14 @@ export class HomeScreen implements Screen {
     nameLabel.classList.add("player-name-input");
     nameLabel.appendChild(document.createTextNode("Your name: "));
     const nameInput = document.createElement("input");
+    getRandomName().then((name) => {
+      if (nameInput.value === "") {
+        nameInput.value = name;
+      }
+    });
     nameInput.type = "text";
     // The server caps a name at the same length; this only saves the round trip.
     nameInput.maxLength = 24;
-    nameInput.placeholder = "Anonymous";
     nameInput.value = this.options.settings.playerName;
     nameLabel.appendChild(nameInput);
     onlineOptions.appendChild(nameLabel);

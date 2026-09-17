@@ -21,12 +21,15 @@ import { AiPlayer } from "../ai/ai-player.ts";
 import type {
   ClockState,
   Color,
+  GameResult,
   MoveRejection,
   MoveRequest,
+  SerializedPlay,
   TimeControlSpec,
 } from "../online/protocol.ts";
 import {
   deserializeBoardState,
+  deserializeMove,
   pieceTypeFromKey,
   pieceTypeKey,
   type SerializedBoardState,
@@ -39,6 +42,9 @@ import { PieceDragController } from "./piece-drag-controller.ts";
 import { createPromotionDialogue } from "./promotion-dialogue.ts";
 import { describeResult, isDrawn, type GameEndStatus } from "./result-text.ts";
 import type { PieceType } from "../pieces/piece_types/index.ts";
+
+/** A callback that does nothing, for playing moves out without a board to tell. */
+const ignore = () => {};
 
 /** The pieces `mine` has that `theirs` does not, ordered from least to most valuable. */
 function surplusPieces(mine: Piece[], theirs: Piece[]): PieceType[] {
@@ -114,6 +120,17 @@ export interface ChessScreenOptions {
   playerNames?: Partial<Record<Color, string>>;
   /** Set when the game is played against someone over the network. */
   online?: OnlineOpponent;
+  /**
+   * The side to show at the bottom of the board. An online game shows the side
+   * this browser plays; a game being read shows the side its reader played, or
+   * White when they played neither.
+   */
+  orientation?: Color;
+  /**
+   * Set when the screen is only for reading a finished game. The moves are
+   * still played out, but nothing is credited to this browser's discoveries.
+   */
+  review?: boolean;
   onPlayAgain?: () => void;
 }
 
@@ -186,6 +203,10 @@ export default class ChessScreen implements Screen {
   private readonly playerNames: Record<Color, string>;
   /** The opponent this browser is playing over the network, when there is one. */
   private readonly online: OnlineOpponent | undefined;
+  /** The side shown at the bottom of the board. */
+  private readonly orientation: Color;
+  /** Whether the screen is only for reading a finished game. */
+  private readonly review: boolean;
   /** The move this browser last asked the server to play, if any. */
   private onlineRequest: { piece: Piece; move: SpecialMovement } | null = null;
   /** Where a short message for the player is shown, once the screen is up. */
@@ -228,6 +249,8 @@ export default class ChessScreen implements Screen {
   constructor(options: ChessScreenOptions = {}) {
     this.options = options;
     this.online = options.online;
+    this.review = options.review ?? false;
+    this.orientation = options.orientation ?? this.online?.color ?? "white";
 
     if (options.initialBoard) {
       // Someone else laid the position out — in an online game, the server.
@@ -271,9 +294,9 @@ export default class ChessScreen implements Screen {
       onTileClick: (tile) => this.clickTile(tile),
       onPointerDown: (event) => this.onBoardPointerDown(event),
     });
-    // Playing black shows the board from black's side, so the pieces this
-    // browser commands are the ones nearest the bottom of the screen.
-    if (this.online?.color === "black") {
+    // Playing black, or reading a game black played, shows the board from
+    // black's side, so the pieces nearest the bottom are that side's.
+    if (this.orientation === "black") {
       this.boardView.element.classList.add("black");
     }
     this.arrowsLayer = new ArrowsLayer(this.boardView.element);
@@ -322,7 +345,7 @@ export default class ChessScreen implements Screen {
     leftColumn.classList.add("left-column");
     // Seen from black's side the player bars swap over, so the bar belonging to
     // the side at the bottom of the screen sits below the board too.
-    if (this.online?.color === "black") {
+    if (this.orientation === "black") {
       leftColumn.classList.add("black");
     }
     parent.appendChild(leftColumn);
@@ -696,12 +719,20 @@ export default class ChessScreen implements Screen {
    * Replaces the board with the game the server is holding, after this browser
    * took its seat back. Unlike a move it also restores the clocks, whose move it
    * is this browser's to make next, and any draw offer still standing.
+   *
+   * `history` is the game from its opening, which puts the move log back: the
+   * moves played while this browser was away would otherwise be missing from it.
    */
   applyResume(
     board: SerializedBoardState,
     clock: ClockState,
     drawOffers: Color[],
+    history?: { initialBoard: SerializedBoardState; moves: SerializedPlay[] },
   ): void {
+    if (history && this.plyCount === 0 && history.moves.length > 0) {
+      this.seedHistory(history.initialBoard, history.moves);
+    }
+
     const state = deserializeBoardState(board);
     this.game.state = state;
     this.visibleState = state;
@@ -731,6 +762,59 @@ export default class ChessScreen implements Screen {
     this.clearSelection();
     // The connection is back, so anything the board was saying about it is done.
     if (this.noticeElement) this.noticeElement.hidden = true;
+  }
+
+  /**
+   * Plays a game's moves out again, to put its move log and the positions it can
+   * be read back through on screen. The moves are applied to a game of their
+   * own, so the position the board is showing is left alone.
+   */
+  private seedHistory(
+    initialBoard: SerializedBoardState,
+    moves: SerializedPlay[],
+  ): void {
+    const game = new ChessGame();
+    game.state = deserializeBoardState(initialBoard);
+    for (const play of moves) {
+      const move = deserializeMove(play.move, game.state);
+      if (!move) break;
+      game.movePiece(move, ignore, ignore, ignore, ignore, ignore);
+      this.historyBar?.addLogEntry(cloneChessBoardState(game.state), play.pgn);
+      this.plyCount++;
+    }
+  }
+
+  /**
+   * Shows a finished game for reading: its moves are played out to rebuild the
+   * log and the positions it can be stepped through, the board is left where the
+   * game ended, and the result is put up. Nothing can be played from here.
+   */
+  showReview(moves: SerializedPlay[], result: GameResult): void {
+    const initial = this.options.initialBoard
+      ? deserializeBoardState(this.options.initialBoard)
+      : cloneChessBoardState(this.game.state);
+
+    const game = new ChessGame();
+    game.state = initial;
+    for (const play of moves) {
+      const move = deserializeMove(play.move, game.state);
+      if (!move) break;
+      game.movePiece(move, ignore, ignore, ignore, ignore, ignore);
+      this.historyBar?.addLogEntry(cloneChessBoardState(game.state), play.pgn);
+      this.plyCount++;
+    }
+
+    this.game.state = game.state;
+    this.visibleState = game.state;
+    this.boardView.syncPieces(game.state.pieces);
+    if (game.state.lastMove) {
+      this.boardView.setHighlightedMoves(game.state.lastMove);
+    }
+    this.updateCheckMarkers(game.state);
+    this.updateMaterialAdvantage(game.state);
+    this.updateTurnIndicator();
+    this.clearSelection();
+    this.declareResult(result.status, result.winner);
   }
 
   /** Shows the draw offers the server holds, as of taking a seat back. */
@@ -951,6 +1035,9 @@ export default class ChessScreen implements Screen {
    * A game that was called off decided nothing, so nothing is credited for it.
    */
   private recordDiscovery(status: GameEndStatus, loser: Color | null): void {
+    // A game being read was not played here, so it is not this browser's
+    // discovery however it ended.
+    if (this.review) return;
     if (status === "abort") return;
     const playerColor: Color = this.online?.color ??
       (this.game.players.white.type === "human" ? "white" : "black");

@@ -545,7 +545,7 @@ Deno.test("a player who comes back finds their clock has been running", () => {
   assert.equal(returning.last("resumed")?.clock.white, 55_000);
 });
 
-Deno.test("a rejoin with the wrong identifier is refused", () => {
+Deno.test("a rejoin with the wrong identifier is refused", async () => {
   const lobby = deterministicLobby();
   const { white } = matched(
     lobby,
@@ -563,13 +563,78 @@ Deno.test("a rejoin with the wrong identifier is refused", () => {
   assert.match(stranger.last("error")?.message ?? "", /not a player/);
   assert.equal(stranger.last("resumed"), undefined);
 
+  // A game that is not running and was never finished is not there at all.
   const elsewhere = new FakeClient("elsewhere");
   lobby.handleMessage(elsewhere, {
     type: "rejoin",
     gameId: "no-such-game",
     playerId: match.playerId,
   });
-  assert.match(elsewhere.last("error")?.message ?? "", /no longer running/);
+  await settle();
+  assert.match(elsewhere.last("error")?.message ?? "", /no longer available/);
+});
+
+Deno.test("a finished game can be asked for by its id", async () => {
+  const games = new MemoryGameStore();
+  const players = new MemoryPlayerStore();
+  const lobby = new Lobby({ random: () => 0, now: () => 0, games, players });
+  const { white, black } = matched(
+    lobby,
+    new FakeClient("first"),
+    new FakeClient("second"),
+  );
+  const match = white.last("matched")!;
+
+  lobby.handleMessage(white, {
+    type: "move",
+    pieceId: 4,
+    from: { x: 4, y: 1 },
+    to: { x: 4, y: 3 },
+  });
+  lobby.handleMessage(black, { type: "resign" });
+  await settle();
+
+  // Someone who played neither side can still read it: the link is the key.
+  const viewer = new FakeClient("viewer");
+  lobby.handleMessage(viewer, {
+    type: "rejoin",
+    gameId: match.gameId,
+    playerId: "someone-else",
+  });
+  await settle();
+
+  const reviewed = viewer.last("reviewed");
+  assert.ok(reviewed, "the finished game should be sent");
+  assert.equal(reviewed.gameId, match.gameId);
+  assert.equal(reviewed.color, null, "the viewer played neither side");
+  assert.equal(reviewed.result.status, "resign");
+  assert.equal(reviewed.result.winner, "white");
+  assert.equal(reviewed.initialBoard.turn, "white");
+  // The moves were rebuilt from the PGN the record holds.
+  assert.equal(reviewed.moves.length, 1);
+  assert.equal(reviewed.moves[0].pgn, "e4");
+  assert.equal(reviewed.moves[0].color, "white");
+});
+
+Deno.test("a running game cannot be read by someone who does not hold a seat", async () => {
+  const lobby = deterministicLobby();
+  const { white } = matched(
+    lobby,
+    new FakeClient("first"),
+    new FakeClient("second"),
+  );
+  const match = white.last("matched")!;
+
+  const stranger = new FakeClient("stranger");
+  lobby.handleMessage(stranger, {
+    type: "rejoin",
+    gameId: match.gameId,
+    playerId: "someone-else",
+  });
+  await settle();
+
+  assert.equal(stranger.last("reviewed"), undefined);
+  assert.match(stranger.last("error")?.message ?? "", /not a player/);
 });
 
 Deno.test("a rejoin takes over a seat an older connection still holds", () => {

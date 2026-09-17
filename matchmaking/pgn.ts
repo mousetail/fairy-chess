@@ -21,3 +21,21 @@ export function movesToPgn(moves: LoggedMove[]): string {
   }
   return parts.join(" ");
 }
+
+/**
+ * The moves a PGN move list names, in order.
+ *
+ * The inverse of {@link movesToPgn}. White opens every pair, so the colours
+ * simply alternate; move numbers carry nothing the order does not.
+ */
+export function parsePgn(pgn: string): LoggedMove[] {
+  const moves: LoggedMove[] = [];
+  for (const token of pgn.split(/\s+/).filter(Boolean)) {
+    if (/^\d+\.+$/.test(token)) continue;
+    moves.push({
+      color: moves.length % 2 === 0 ? "white" : "black",
+      pgn: token,
+    });
+  }
+  return moves;
+}

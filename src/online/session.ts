@@ -5,10 +5,13 @@ import { loadPlayerId, savePlayerId } from "./player-identity.ts";
 import {
   type ClockState,
   type Color,
+  type GameHistory,
   type GameOverStatus,
+  type GameResult,
   type MoveRejection,
   type MoveRequest,
   PROTOCOL_VERSION,
+  type SerializedPlay,
   type ServerMessage,
   type TimeControlSpec,
 } from "./protocol.ts";
@@ -84,6 +87,7 @@ export interface GameListener {
     board: SerializedBoardState,
     clock: ClockState,
     drawOffers: Color[],
+    history: GameHistory,
   ): void;
   /** The connection dropped and could not be restored. */
   disconnected(): void;
@@ -110,6 +114,8 @@ export interface OnlineGame {
   readonly clock: ClockState;
   /** The sides with a draw offer standing at hand-over, if any. */
   readonly drawOffers: Color[];
+  /** The game from its opening, so the move log can be put back. */
+  readonly history: GameHistory;
   /**
    * Registers the screen showing this game, which hears about everything that
    * happens from here on. Nothing can arrive in between: a game only starts
@@ -140,12 +146,40 @@ interface GameSender {
   cancelDraw(): void;
 }
 
+/**
+ * A finished game, as the app and the review board see it.
+ *
+ * It is not playable: nobody sits at it, and the board it is shown on is only
+ * for looking at the moves again. `color` is the side the viewer played, or
+ * `null` when they did not play this game and are only reading it.
+ */
+export interface ReviewedGame {
+  readonly gameId: string;
+  readonly color: Color | null;
+  readonly whiteName: string;
+  readonly blackName: string;
+  readonly complexity: number;
+  readonly complexityLabel: string;
+  readonly timeControl: TimeControlSpec;
+  readonly result: GameResult;
+  /** The position the game started from. */
+  readonly initialBoard: SerializedBoardState;
+  /** Every move, in order, ready to be applied to the opening position. */
+  readonly moves: SerializedPlay[];
+}
+
 export interface MatchmakingSessionOptions {
   /**
    * Called when a game starts, so the app can put the board on screen. The
    * session has already cleared its own state by the time this runs.
    */
   onGame(game: OnlineGame): void;
+  /**
+   * Called when a finished game is asked for by its id, so the app can put it on
+   * screen for reading. A game shared by its link arrives here rather than at
+   * {@link onGame}, since there is nobody to play against.
+   */
+  onReview?(game: ReviewedGame): void;
   /**
    * The server to talk to, in place of the one the build was made with. Tests
    * set it; a blank value stands for a build that was told of none.
@@ -384,6 +418,9 @@ export class MatchmakingSession {
       case "resumed":
         this.resumeGame(message);
         return;
+      case "reviewed":
+        this.reviewGame(message);
+        return;
       case "ping":
         // The keepalive is answered by the client, not by the session.
         return;
@@ -471,6 +508,8 @@ export class MatchmakingSession {
           running: null,
         },
         drawOffers: [],
+        // A game that has just started has no moves to put back.
+        history: { initialBoard: message.board, moves: [] },
       },
       this.sender(),
     );
@@ -497,7 +536,12 @@ export class MatchmakingSession {
 
     const existing = this.game;
     if (existing) {
-      existing.applyResume(message.board, message.clock, message.drawOffers);
+      existing.applyResume(
+        message.board,
+        message.clock,
+        message.drawOffers,
+        message.history,
+      );
       this.setStatus({ state: "idle" });
       return;
     }
@@ -514,6 +558,7 @@ export class MatchmakingSession {
         board: message.board,
         clock: message.clock,
         drawOffers: message.drawOffers,
+        history: message.history,
       },
       this.sender(),
     );
@@ -521,6 +566,33 @@ export class MatchmakingSession {
     this.game = game;
     this.setStatus({ state: "idle" });
     this.options.onGame(game);
+  }
+
+  /**
+   * Hands a finished game to the app to be read, and forgets it: there is no
+   * seat at it and nothing to reconnect to.
+   */
+  private reviewGame(
+    message: Extract<ServerMessage, { type: "reviewed" }>,
+  ): void {
+    this.cancelReconnect();
+    this.reconnectAttempts = 0;
+    this.gameId = null;
+    this.game = null;
+    this.searching = false;
+    this.setStatus({ state: "idle" });
+    this.options.onReview?.({
+      gameId: message.gameId,
+      color: message.color,
+      whiteName: message.whiteName,
+      blackName: message.blackName,
+      complexity: message.complexity,
+      complexityLabel: message.complexityLabel,
+      timeControl: message.timeControl,
+      result: message.result,
+      initialBoard: message.initialBoard,
+      moves: message.moves,
+    });
   }
 
   /** Everything the game sends on this browser's behalf. */
@@ -655,6 +727,7 @@ class Game implements OnlineGame {
   readonly complexityLabel: string;
   readonly timeControl: TimeControlSpec;
   readonly board: SerializedBoardState;
+  readonly history: GameHistory;
 
   private readonly sender: GameSender;
   private listener: GameListener | null = null;
@@ -673,6 +746,7 @@ class Game implements OnlineGame {
       board: SerializedBoardState;
       clock: ClockState;
       drawOffers: Color[];
+      history: GameHistory;
     },
     sender: GameSender,
   ) {
@@ -686,6 +760,7 @@ class Game implements OnlineGame {
     this.board = init.board;
     this.clockState = init.clock;
     this.offeredDraws = [...init.drawOffers];
+    this.history = init.history;
     this.sender = sender;
   }
 
@@ -731,10 +806,11 @@ class Game implements OnlineGame {
     board: SerializedBoardState,
     clock: ClockState,
     drawOffers: Color[],
+    history: GameHistory,
   ): void {
     this.clockState = clock;
     this.offeredDraws = [...drawOffers];
-    this.listener?.resumed(board, clock, drawOffers);
+    this.listener?.resumed(board, clock, drawOffers, history);
   }
 
   /** Reports that the connection went away and is being reopened. */

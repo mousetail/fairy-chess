@@ -50,10 +50,9 @@ export class PieceInfoBar {
   show(piece: PieceType | null): void {
     if (!piece) {
       this.element.classList.add("empty");
-      this.title.textContent = "Select a piece";
+      this.title.textContent = "";
       this.aliases.textContent = "";
-      this.description.textContent =
-        "Pick a piece on the board to see how it moves.";
+      this.description.textContent = "";
       this.diagram.replaceChildren();
       this.diagram.style.removeProperty("--size");
       return;

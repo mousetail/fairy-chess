@@ -4,7 +4,11 @@ import { DiscoveriesScreen } from "./discoveries-screen.ts";
 import { HomeScreen } from "./home-screen.ts";
 import { gameHash, gameIdFromHash } from "./online/game-link.ts";
 import type { Color } from "./online/protocol.ts";
-import { type OnlineGame, MatchmakingSession } from "./online/session.ts";
+import {
+  type OnlineGame,
+  MatchmakingSession,
+  type ReviewedGame,
+} from "./online/session.ts";
 import type { Screen } from "./screen.ts";
 import { type HomeScreenSettings, loadSettings, saveSettings } from "./settings.ts";
 
@@ -30,6 +34,7 @@ export class App {
     this.parent = parent;
     this.matchmaking = new MatchmakingSession({
       onGame: (game) => this.startGame(game),
+      onReview: (game) => this.showReview(game),
     });
   }
 
@@ -109,7 +114,8 @@ export class App {
       moveRejected: (rejection) => screen.reportRejection(rejection),
       notice: (text) => screen.showNotice(text),
       gameOver: (status, winner) => {
-        this.clearGameHash();
+        // The game's name is left in the address bar: the link still shows it,
+        // and it is what makes it shareable.
         screen.declareResult(status, winner);
       },
       opponentAway: () =>
@@ -124,10 +130,9 @@ export class App {
         screen.showNotice(
           `The connection was lost. Trying to rejoin the game (attempt ${attempt})…`,
         ),
-      resumed: (board, clock, drawOffers) =>
-        screen.applyResume(board, clock, drawOffers),
+      resumed: (board, clock, drawOffers, history) =>
+        screen.applyResume(board, clock, drawOffers, history),
       disconnected: () => {
-        this.clearGameHash();
         if (screen.gameEnded) return;
         // The seat could not be taken back. The server still holds it and this
         // browser's clock is running there, so the game will be lost on time if
@@ -144,15 +149,31 @@ export class App {
     // The game's UUID names it in the address bar, so a reload comes back to it.
     location.hash = gameHash(game.gameId);
     this.show(screen);
-    // The position, clocks and offers the server is holding are applied after
-    // the screen is up: a fresh game's are the same ones its options already
-    // carry, and a rejoined game's replace them.
-    screen.applyResume(game.board, game.clock, game.drawOffers);
+    // The position, clocks, offers and move log the server is holding are
+    // applied after the screen is up: a fresh game's are the same ones its
+    // options already carry, and a rejoined game's replace them.
+    screen.applyResume(game.board, game.clock, game.drawOffers, game.history);
   }
 
-  /** Takes the game's name out of the address bar, once there is no game to name. */
-  private clearGameHash(): void {
-    if (gameIdFromHash(location.hash) === null) return;
-    history.replaceState(null, "", location.pathname + location.search);
+  /** Puts a finished game on screen, for reading rather than playing. */
+  private showReview(game: ReviewedGame): void {
+    const names: Record<Color, string> = {
+      white: game.whiteName.trim() || "White",
+      black: game.blackName.trim() || "Black",
+    };
+    const screen = new ChessScreen({
+      initialBoard: game.initialBoard,
+      playerNames: names,
+      // The reader's side is at the bottom when they played, and White's is
+      // otherwise, so a game read by a stranger still opens the familiar way.
+      orientation: game.color ?? "white",
+      review: true,
+      onPlayAgain: () => this.showHome(),
+    });
+
+    // The game's name stays in the address bar: it is the link that was followed.
+    location.hash = gameHash(game.gameId);
+    this.show(screen);
+    screen.showReview(game.moves, game.result);
   }
 }
