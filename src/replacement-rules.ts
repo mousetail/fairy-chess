@@ -59,7 +59,7 @@ export const maxCopiesPerPiece = 2;
  * {@link maxCopiesPerPiece} pieces of type `to`.
  */
 function replace(from: PieceType, to: PieceType): ReplacementRule["apply"] {
-  return (board, color) => {
+  return (board, color, random) => {
     const pieces = board.pieces.filter(
       (candidate) => candidate.color === color && candidate.type === from,
     );
@@ -70,7 +70,7 @@ function replace(from: PieceType, to: PieceType): ReplacementRule["apply"] {
     if (to !== pieceTypes.pawn && copies >= maxCopiesPerPiece) {
       return false;
     }
-    pieces[Math.floor(Math.random() * pieces.length)].type = to;
+    pieces[Math.floor(random.next() * pieces.length)].type = to;
     return true;
   };
 }
@@ -167,8 +167,8 @@ function everyOtherPawnRule(
     name,
     complexity: 4,
     positionalValue,
-    apply: (board, color) => {
-      let parity = Math.random() < 0.5 ? 0 : 1;
+    apply: (board, color, random) => {
+      let parity = random.next() < 0.5 ? 0 : 1;
       const pawns = board.pieces.filter(
         (candidate) =>
           candidate.position.x % 2 === parity &&
@@ -424,9 +424,7 @@ function materialValue(board: ChessBoardState, color: Color): number {
     .reduce((total, piece) => total + piece.type.value, 0);
 }
 /**
- * Tests whether a rule can apply to every colour, without changing the board.
- * Applies to a clone so that symmetric rules are checked against the position
- * their own earlier applications would produce.
+ * Applies a rule to both colors
  */
 function applyToAll(
   rule: ReplacementRule,
@@ -435,9 +433,12 @@ function applyToAll(
   random: Random,
 ): ChessBoardState[] {
   const clone: ChessBoardState = cloneChessBoardState(board);
+  let rng = random.clone();
+  random.next();
   const e = colors.reduce<boolean>(
     (e: boolean,
-      color: Color) => e && rule.apply(clone, color, random),
+      // Both sides must use the same RNG value
+      color: Color) => e && rule.apply(clone, color, rng.clone()),
     true,
   );
   return e ? [clone] : [];
