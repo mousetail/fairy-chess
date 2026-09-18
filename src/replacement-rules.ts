@@ -5,6 +5,7 @@ import {
 } from "./chess-board.ts";
 import type { PieceType } from "./pieces/piece_types/index.ts";
 import pieceTypes from "./pieces/piece_types/index.ts";
+import type { Random } from "./random.ts";
 
 type Color = Piece["color"];
 
@@ -23,7 +24,7 @@ export interface ReplacementRule {
    * Replaces one piece belonging to `color` on `board`, mutating it in place.
    * Returns false when the board holds no piece this rule can replace.
    */
-  apply: (board: ChessBoardState, color: Color) => boolean;
+  apply: (board: ChessBoardState, color: Color, random: Random) => boolean;
   /**
    * Whether the rule must be applied to every colour at once, so the two sides
    * can never end up with different results. The king variants set this: the
@@ -80,13 +81,24 @@ function rule(name: string, from: PieceType, to: PieceType): ReplacementRule {
 }
 
 /**
- * Builds a rule that swaps the king for a king variant. It is applied to both
- * colours at once, since the engine supports a single king per variant, and it
- * is only offered occasionally so the classic king still appears in most games.
+ * Builds a rule that swaps the king for a king variant.
  */
 function kingRule(name: string, to: PieceType): ReplacementRule {
   return {
-    ...rule(name, pieceTypes.king, to),
+    name,
+    complexity: 1,
+    // Replaces both colors kings
+    apply: (board, _color) => {
+      const king = board.pieces.filter(
+        (candidate) =>
+          candidate.type === pieceTypes.king,
+      );
+      if (king.length === 0) return false;
+      king.forEach((candidate) => {
+        candidate.type = to;
+      });
+      return true;
+    },
     symmetricOnly: true,
     replacesKing: true,
   };
@@ -158,8 +170,8 @@ function everyOtherPawnRule(
     apply: (board, color) => {
       let parity = Math.random() < 0.5 ? 0 : 1;
       const pawns = board.pieces.filter(
-        (candidate, index) =>
-          index % 2 === parity &&
+        (candidate) =>
+          candidate.position.x % 2 === parity &&
           candidate.color === color &&
           candidate.type === pieceTypes.pawn,
       );
@@ -207,12 +219,7 @@ function pawnSplitRule(
 /**
  * Builds a rule for a piece that arrives as a stacked double squad: it replaces
  * every pawn of a colour and adds a copy one square in front of each, so the
- * corps fills two whole rows. The second row is wanted because the piece jumps
- * an adjacent piece, so the copies in front of each other give the formation
- * its bite.
- *
- * Like {@link pawnSquadRule} it converts the whole corps, so it deliberately
- * ignores {@link maxCopiesPerPiece}.
+ * corps fills two whole rows. Used for weaker pawns.
  */
 function pawnDoubleRowRule(name: string, to: PieceType): ReplacementRule {
   return {
@@ -312,36 +319,20 @@ export const chaosLevels: ChaosLevel[] = [
  * The chance a chaos setup swaps the classic king for a king variant. The king
  * is a large change to the game, so most setups keep the classic one.
  */
-const KING_VARIANT_CHANCE = 0.25;
-
-/**
- * Whether a rule that adds `added` value to a colour should be allowed, given
- * that the colour is `difference` points ahead of its opponent. Only rules that
- * do not push the balance further away from level are allowed: a side that is
- * ahead may not add value, a side that is behind may not lose value, and a rule
- * that changes nothing is always fine. Overshooting past level counts as fine.
- */
-export function keepsBalance(added: number, difference: number): boolean {
-  return added * difference <= 0;
-}
+const KING_VARIANT_CHANCE = 0.35;
 
 /**
  * Applies replacement rules to `board` according to `level`.
- *
- * Symmetric levels apply the same rule to both colours, which keeps the setup
- * mirrored. Asymmetric levels alternate the colours and only let each side take
- * rules that keep the material balance near level, so neither player walks away
- * with a decisive advantage.
  */
 export function applyChaos(
   board: ChessBoardState,
   level: ChaosLevel,
-  random: () => number = Math.random,
+  random: Random,
 ): void {
   if (level.budget <= 0) return;
   // One roll decides the whole game: the king variants are only offered a
   // quarter of the time, so the classic king still shows up in most games.
-  const allowKingVariants = random() < KING_VARIANT_CHANCE;
+  const allowKingVariants = random.next() < KING_VARIANT_CHANCE;
   const rules = replacementRules.filter(
     (rule) => !rule.replacesKing || allowKingVariants,
   );
@@ -361,77 +352,69 @@ function applyRules(
   rules: ReplacementRule[],
   colors: Color[],
   budget: number,
-  random: () => number,
+  random: Random,
 ): void {
   let spent = 0;
   while (spent < budget) {
-    const applicable = rules.filter((rule) =>
-      canApplyToAll(rule, board, colors),
+    const applicable: [ChessBoardState, ReplacementRule][] = rules.flatMap((rule) =>
+      applyToAll(rule, board, colors, random).map(
+        (clone) => [clone, rule] satisfies [ChessBoardState, ReplacementRule]
+      ),
     );
     if (applicable.length === 0) return;
-    const chosen = applicable[Math.floor(random() * applicable.length)];
-    for (const color of colors) chosen.apply(board, color);
+    const [newBoard, chosen] = applicable[Math.floor(random.next() * applicable.length)];
+    board.pieces = newBoard.pieces;
     spent += chosen.complexity;
   }
 }
 
 /**
  * Applies rules to the two colours in turn, spending `budget` complexity. Each
- * side may only take a rule that keeps the material balance near level (see
- * {@link keepsBalance}), and a rule that is `symmetricOnly` is applied to both
- * sides at once. Alternating the sides while watching the balance stops a random
- * asymmetric setup from handing one player a decisive advantage.
+ * side may only take a rule that keeps the material balance near level
  */
 function applyBalanced(
   board: ChessBoardState,
   rules: ReplacementRule[],
   budget: number,
-  random: () => number,
+  random: Random,
 ): void {
   const colors: Color[] = ["white", "black"];
   let turn = 0;
   let spent = 0;
   while (spent < budget) {
-    let chosen: ReplacementRule | undefined;
+    let chosen: ChessBoardState | undefined;
+    let rule: ReplacementRule | undefined;
     let chooser = 0;
+
+    let balance = materialValue(board, "white") - materialValue(board, "black");
     // The side whose turn it is picks first, but the other side may move instead
     // when the first has no rule that keeps the balance.
     for (let offset = 0; offset < colors.length && !chosen; offset++) {
       const index = (turn + offset) % colors.length;
       const color = colors[index];
-      const eligible = rules.filter(
-        (rule) =>
-          canApplyTo(rule, board, color, colors) &&
-          movesTowardsBalance(rule, board, color),
+      const eligible = rules.flatMap(
+        (rule) => {
+          let clone = cloneChessBoardState(board);
+          if (rule.apply(clone, color, random)) {
+            let newBalance = materialValue(clone, "white") - materialValue(clone, "black");
+            // Move towards a piece value balance
+            if (balance === 0 || (balance > 0 && newBalance <= balance) || (balance < 0 && newBalance >= balance)) {
+              return [[clone, rule] satisfies [ChessBoardState, ReplacementRule]];
+            }
+          }
+          return [];
+        },
       );
       if (eligible.length === 0) continue;
-      chosen = eligible[Math.floor(random() * eligible.length)];
+      [chosen, rule] = eligible[Math.floor(random.next() * eligible.length)];
       chooser = index;
     }
-    if (!chosen) return;
-    if (chosen.symmetricOnly) {
-      for (const color of colors) chosen.apply(board, color);
-    } else {
-      chosen.apply(board, colors[chooser]);
-    }
-    spent += chosen.complexity;
+    if (!chosen || !rule) return;
+    board.pieces = chosen.pieces;
+    spent += rule.complexity;
     // The next side to pick is the one after whoever just moved.
     turn = chooser + 1;
   }
-}
-
-/** Whether applying `rule` to `color` keeps the balance near level. */
-function movesTowardsBalance(
-  rule: ReplacementRule,
-  board: ChessBoardState,
-  color: Color,
-): boolean {
-  // A `symmetricOnly` rule touches both sides equally, so it cannot unbalance.
-  if (rule.symmetricOnly) return true;
-  const opponent: Color = color === "white" ? "black" : "white";
-  const difference =
-    materialValue(board, color) - materialValue(board, opponent);
-  return keepsBalance(addedValue(rule, board, color), difference);
 }
 
 /** The total point value of a colour's pieces on the board. */
@@ -440,44 +423,22 @@ function materialValue(board: ChessBoardState, color: Color): number {
     .filter((piece) => piece.color === color)
     .reduce((total, piece) => total + piece.type.value, 0);
 }
-
-/**
- * The point value a rule adds to `color`, including its positional override.
- * Measured by applying the rule to a copy of the board, so it can never drift
- * from what {@link ReplacementRule.apply} actually does.
- */
-export function addedValue(
-  rule: ReplacementRule,
-  board: ChessBoardState,
-  color: Color,
-): number {
-  const before = materialValue(board, color);
-  const clone = cloneChessBoardState(board);
-  if (!rule.apply(clone, color)) return 0;
-  return materialValue(clone, color) - before + (rule.positionalValue ?? 0);
-}
-
-/** Whether `rule` may be applied to `color`, without changing the board. */
-function canApplyTo(
-  rule: ReplacementRule,
-  board: ChessBoardState,
-  color: Color,
-  colors: Color[],
-): boolean {
-  if (rule.symmetricOnly) return canApplyToAll(rule, board, colors);
-  return rule.apply(cloneChessBoardState(board), color);
-}
-
 /**
  * Tests whether a rule can apply to every colour, without changing the board.
  * Applies to a clone so that symmetric rules are checked against the position
  * their own earlier applications would produce.
  */
-function canApplyToAll(
+function applyToAll(
   rule: ReplacementRule,
   board: ChessBoardState,
   colors: Color[],
-): boolean {
-  const clone = cloneChessBoardState(board);
-  return colors.every((color) => rule.apply(clone, color));
+  random: Random,
+): ChessBoardState[] {
+  const clone: ChessBoardState = cloneChessBoardState(board);
+  const e = colors.reduce<boolean>(
+    (e: boolean,
+      color: Color) => e && rule.apply(clone, color, random),
+    true,
+  );
+  return e ? [clone] : [];
 }

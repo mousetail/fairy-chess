@@ -1,12 +1,14 @@
 import type { PieceType } from "./pieces/piece_types/index.ts";
 import { parseDiagram, type DiagramTile } from "./pieces/diagram.ts";
 import { getImageFromPromise } from "./chess-screen/piece-images.ts";
+import pieceTypes from "./pieces/piece_types/index.ts";
 
 const tileClass: Record<DiagramTile, string> = {
   empty: "empty",
   piece: "piece",
   move: "move",
   capture: "capture",
+  enemy: "piece",
 };
 
 /**
@@ -80,6 +82,11 @@ export class PieceInfoBar {
             (rowIndex + columnIndex) % 2 === 0 ? "even" : "odd",
             tileClass[tile],
           );
+          if (tile === "enemy") {
+            const image = getImageFromPromise(pieceTypes.pawn.image, "black");
+            image.classList.add("piece-info-piece");
+            cell.appendChild(image);
+          }
           if (tile === "piece") {
             const image = getImageFromPromise(piece.image, "white");
             image.classList.add("piece-info-piece");

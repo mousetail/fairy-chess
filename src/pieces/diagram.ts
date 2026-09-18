@@ -1,16 +1,6 @@
 /** How a single tile of a piece's movement diagram is drawn. */
-export type DiagramTile = "empty" | "piece" | "move" | "capture";
+export type DiagramTile = "empty" | "piece" | "move" | "capture" | "enemy";
 
-/**
- * A hand-drawn picture of how a piece moves, shown in the piece info panel.
- *
- * `rows` holds one string per row, top row first, and each character describes
- * a single tile:
- *   `.` empty
- *   `o` the piece itself
- *   `x` a square the piece can move to (and usually capture on)
- *   `c` a square the piece can only capture on
- */
 export interface PieceDiagram {
   /** Width and height of the diagram, in tiles. */
   size: number;
@@ -22,6 +12,7 @@ const tileForCharacter: Record<string, DiagramTile> = {
   o: "piece",
   x: "move",
   c: "capture",
+  E: "enemy",
 };
 
 /** Expands a {@link PieceDiagram} into a `size` by `size` grid of tile kinds. */

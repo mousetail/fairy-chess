@@ -10,6 +10,7 @@ import {
 } from "./chess-board.ts";
 import type { Tile } from "./chess-tile.ts";
 import pieceTypes, { type PieceType } from "./pieces/piece_types/index.ts";
+import { Xoshiro128ss } from "./random.ts";
 import {
   applyChaos,
   chaosLevels,
@@ -216,9 +217,9 @@ export class ChessGame {
         id: x + 24,
       });
     }
-    applyChaos(board.state, chaos);
+    applyChaos(board.state, chaos, new Xoshiro128ss(Math.random() * 2**32, Math.random() * 2**32, Math.random() * 2**32, Math.random() * 2**32));
     board.state.symbols = resolveSymbols(
-      new Set(board.state.pieces.map((piece) => piece.type)),
+      new Set(board.state.pieces.map((piece) => piece.type))
     );
     return board;
   }
