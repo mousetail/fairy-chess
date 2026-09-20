@@ -148,8 +148,7 @@ export class App {
       },
       opponentAway: () =>
         screen.showNotice(
-          "Your opponent's connection dropped. The game carries on; their " +
-            "clock is running.",
+          "Your opponent's connection dropped.",
         ),
       opponentBack: () => screen.showNotice("Your opponent is back."),
       drawOffered: (color) => screen.reportDrawOffer(color),
