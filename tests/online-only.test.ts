@@ -103,7 +103,7 @@ test("the snake bounces off the walls", () => {
   ]);
 });
 
-test("the spider drops an anchor on every square it passes over", () => {
+test("the spider drops an anchor on its start and every square it passes over", () => {
   const state = buildState(
     [{ type: pieceTypes.spider, color: "white", square: "d4" }],
     "white",
@@ -114,7 +114,7 @@ test("the spider drops an anchor on every square it passes over", () => {
   )!;
   assert.deepEqual(
     move.drops?.map((drop) => algebraicFromTile(drop.tile)),
-    ["d5", "d6"],
+    ["d4", "d5", "d6"],
   );
 });
 
@@ -152,7 +152,7 @@ test("anchors vanish at the start of their owner's next turn", () => {
       .filter((piece) => piece.type === pieceTypes.anchor)
       .map((piece) => algebraicFromTile(piece.position))
       .sort(),
-    ["d5", "d6"],
+    ["d4", "d5", "d6"],
   );
 
   // Black plays a move; the anchors belong to white, so they survive it.

@@ -48,6 +48,8 @@ export interface Client {
 interface WaitingPlayer extends Preference {
   client: Client;
   seat: StoredSeat;
+  /** A replacement rule this player asked to try first, by name, if any. */
+  replacementOverride?: string;
 }
 
 /**
@@ -203,6 +205,7 @@ export class Lobby {
       timeControl: number;
       name?: string;
       playerId?: string;
+      replacementOverride?: string;
     },
   ): void {
     if (this.roomByClient.has(client.id)) {
@@ -223,6 +226,7 @@ export class Lobby {
       complexity,
       timeControl,
       seat,
+      replacementOverride: options.replacementOverride,
     };
     this.waiting.set(client.id, waiting);
 
@@ -531,7 +535,14 @@ export class Lobby {
       : [second, first];
 
     const now = this.now();
-    const session = new GameSession(complexity);
+    // A testing override either player asked for is used, and when both asked
+    // for one either is as good as the other, so the coin decides.
+    const replacementOverride = chooseOverride(
+      first.replacementOverride,
+      second.replacementOverride,
+      this.random,
+    );
+    const session = new GameSession(complexity, undefined, replacementOverride);
     const room: Room = {
       // The UUID is the game's public name: it is what the players put in the
       // address bar to come back to the game, and what the store is keyed by.
@@ -769,6 +780,21 @@ export class Lobby {
   private fail(client: Client, message: string): void {
     client.send({ type: "error", message });
   }
+}
+
+/**
+ * The replacement override a game is laid out with. When both players set one,
+ * either is as good as the other, so `random` picks between them.
+ */
+function chooseOverride(
+  first: string | undefined,
+  second: string | undefined,
+  random: () => number,
+): string | undefined {
+  if (first !== undefined && second !== undefined) {
+    return random() < 0.5 ? first : second;
+  }
+  return first ?? second;
 }
 
 /** The time control at `index`, spelled out the way a client is told it. */

@@ -39,6 +39,12 @@ export function parseClientMessage(raw: string): ParseResult {
       if (record.playerId !== undefined && !isPlayerId(record.playerId)) {
         return invalid("A playerId must be a short identifier.");
       }
+      if (
+        record.replacementOverride !== undefined &&
+        typeof record.replacementOverride !== "string"
+      ) {
+        return invalid("A replacement override must be a rule name.");
+      }
       const message: Extract<ClientMessage, { type: "join" }> = {
         type: "join",
         complexity: record.complexity,
@@ -46,6 +52,9 @@ export function parseClientMessage(raw: string): ParseResult {
         name: record.name,
       };
       if (isPlayerId(record.playerId)) message.playerId = record.playerId;
+      if (typeof record.replacementOverride === "string") {
+        message.replacementOverride = record.replacementOverride;
+      }
       return { ok: true, message };
     }
     case "rejoin": {

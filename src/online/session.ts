@@ -231,6 +231,7 @@ export class MatchmakingSession {
     complexity: number;
     timeControl: number;
     name: string;
+    replacementOverride?: string;
   } | null = null;
   /**
    * Whether a search is wanted. A socket that is still opening joins when it
@@ -292,13 +293,20 @@ export class MatchmakingSession {
   /**
    * Asks to be matched at a chaos level with a clock, opening the socket when
    * there is not one already. Asking again while queued only updates the
-   * preference, and keeps the player's place in the queue.
+   * preference, and keeps the player's place in the queue. `replacementOverride`
+   * is a testing aid: a rule to try first when the game is laid out, by name.
    */
-  queue(complexity: number, timeControl: number, name: string): void {
+  queue(
+    complexity: number,
+    timeControl: number,
+    name: string,
+    replacementOverride?: string,
+  ): void {
     this.request = {
       complexity: this.clamp(complexity),
       timeControl: this.clampClock(timeControl),
       name,
+      replacementOverride,
     };
     this.searching = true;
     if (this.currentStatus.state !== "queued") {
@@ -322,6 +330,7 @@ export class MatchmakingSession {
         this.request.timeControl,
         name,
         this.playerId,
+        this.request.replacementOverride,
       );
     }
   }
@@ -416,6 +425,7 @@ export class MatchmakingSession {
       request.timeControl,
       request.name,
       this.playerId,
+      request.replacementOverride,
     );
   }
 

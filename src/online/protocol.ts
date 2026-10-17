@@ -16,7 +16,7 @@ import type { SerializedBoardState, SerializedMove } from "./serialization.ts";
  * The wire protocol version. Bumped whenever a message shape changes, or a
  * message gains a value that an older client would read wrongly.
  */
-export const PROTOCOL_VERSION = 6;
+export const PROTOCOL_VERSION = 7;
 
 export type Color = "white" | "black";
 
@@ -130,6 +130,12 @@ export type ClientMessage =
       timeControl: number;
       name?: string;
       playerId?: string;
+      /**
+       * A replacement rule to try first when the game is laid out, by name. A
+       * testing aid: the server only uses it when it fits the game, and when
+       * both players set one it picks between them.
+       */
+      replacementOverride?: string;
     }
   /**
    * Take back a seat at a game that is still running, after a reload or a lost

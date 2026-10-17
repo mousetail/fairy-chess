@@ -44,7 +44,8 @@ Some pieces need a rule the engine has no notation for. Our parser understands a
 few such extensions (see the table at the end of `betza-modifiers.md`):
 
 - `w` — wall bounce: a rider reflects off the board edge,
-- `d(name)` — drop: leave a piece of the named type on every square passed over,
+- `d(name)` — drop: leave a piece of the named type on the square the move started
+  from and every square it passes over,
 - `U` — universal leaper: jump to any square on the board,
 - `x`/`xx` — replace: swap places with a friendly piece (required with `xx`),
 - `T` — temporary: destroyed at the start of its owner's turn.

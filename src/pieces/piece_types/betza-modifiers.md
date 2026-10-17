@@ -87,7 +87,7 @@ them, and `getBehavior` throws when a piece's `onlineOnly` flag disagrees.
 | Symbol    | Type     | Meaning                                                                                        |
 | --------- | -------- | ---------------------------------------------------------------------------------------------- |
 | **w**     | Modifier | Wall bounce: a rider reflects off the board edge and carries on                                |
-| **d(name)** | Modifier | Drop: leave a piece of the named type on every square the move passes over                     |
+| **d(name)** | Modifier | Drop: leave a piece of the named type on the square the move started from and every square it passes over |
 | **U**     | Atom     | Universal leaper: jump to any square on the board                                              |
 | **x**     | Modifier | Replace: may move onto a friendly piece and swap places with it                                |
 | **xx**    | Modifier | Replace, required: may _only_ move onto a friendly piece and swap places with it               |

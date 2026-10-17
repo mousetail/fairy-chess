@@ -22,7 +22,7 @@ import type {
   MoveRejection,
   MoveRequest,
 } from "../src/online/protocol.ts";
-import { chaosLevels } from "../src/replacement-rules.ts";
+import { chaosLevels, replacementRuleByName } from "../src/replacement-rules.ts";
 import type { PieceType } from "../src/pieces/piece_types/index.ts";
 
 /**
@@ -73,6 +73,7 @@ export class GameSession {
   constructor(
     complexity: number,
     restored?: { board: SerializedBoardState; result: GameResult | null },
+    replacementOverride?: string,
   ) {
     this.complexity = complexity;
     if (restored) {
@@ -83,7 +84,12 @@ export class GameSession {
       this.game.state = deserializeBoardState(restored.board);
       this.result = restored.result;
     } else {
-      this.game = ChessGame.defaultLayout(chaosLevels[complexity]);
+      // A testing override, by name, is tried first when the position is laid
+      // out; a name no rule has is simply ignored.
+      const override = replacementOverride === undefined
+        ? undefined
+        : replacementRuleByName(replacementOverride);
+      this.game = ChessGame.defaultLayout(chaosLevels[complexity], true, override);
     }
   }
 

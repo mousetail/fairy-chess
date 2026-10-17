@@ -95,17 +95,22 @@ export class MatchmakingClient {
   /**
    * Asks to be matched at `complexity` and `timeControl`. Sending it again only
    * updates the preference. `playerId` is the identifier this browser plays
-   * under, which the server records and echoes back.
+   * under, which the server records and echoes back. `replacementOverride` is a
+   * testing aid: a rule to try first when the game is laid out, by name.
    */
   join(
     complexity: number,
     timeControl: number,
     name?: string,
     playerId?: string,
+    replacementOverride?: string,
   ): void {
     const message: ClientMessage = { type: "join", complexity, timeControl };
     if (name !== undefined && name.trim() !== "") message.name = name;
     if (playerId !== undefined) message.playerId = playerId;
+    if (replacementOverride !== undefined && replacementOverride !== "") {
+      message.replacementOverride = replacementOverride;
+    }
     this.send(message);
   }
 

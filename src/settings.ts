@@ -22,6 +22,12 @@ export interface HomeScreenSettings {
   timeControl: string;
   /** The name to show an online opponent, or an empty string for none. */
   playerName: string;
+  /**
+   * A replacement rule to try first when a game is laid out, by name, or absent
+   * for none. A testing aid, set from the home screen's secret menu; it is only
+   * a preference, so a rule that does not fit the game is still skipped.
+   */
+  replacementOverride?: string;
 }
 
 /** What a player who has never chosen anything gets. */
@@ -86,7 +92,7 @@ function sanitize(value: unknown): HomeScreenSettings {
     return { ...defaultSettings };
   }
   const record = value as Record<string, unknown>;
-  return {
+  const settings: HomeScreenSettings = {
     mode: text(record, "mode"),
     minTurnTime: text(record, "minTurnTime"),
     difficulty: text(record, "difficulty"),
@@ -94,11 +100,17 @@ function sanitize(value: unknown): HomeScreenSettings {
     timeControl: text(record, "timeControl"),
     playerName: text(record, "playerName"),
   };
+  // The override is optional, so it is only carried when one was chosen.
+  const override = record.replacementOverride;
+  if (typeof override === "string" && override !== "") {
+    settings.replacementOverride = override;
+  }
+  return settings;
 }
 
 function text(
   record: Record<string, unknown>,
-  key: keyof HomeScreenSettings,
+  key: Exclude<keyof HomeScreenSettings, "replacementOverride">,
 ): string {
   const value = record[key];
   return typeof value === "string" ? value : defaultSettings[key];

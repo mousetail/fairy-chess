@@ -15,7 +15,7 @@ import type { Tile } from "../chess-tile.ts";
 import { recordGame, type GameOutcome } from "../discoveries.ts";
 import { HistoryBar } from "../history-bar.ts";
 import { PieceInfoBar } from "../piece-info-bar.ts";
-import { chaosLevels } from "../replacement-rules.ts";
+import { chaosLevels, replacementRuleByName } from "../replacement-rules.ts";
 import type { Screen } from "../screen.ts";
 import { AiPlayer } from "../ai/ai-player.ts";
 import type {
@@ -110,6 +110,12 @@ export interface ChessScreenOptions {
   black?: Player;
   /** Index into {@link chaosLevels} describing how many fairy pieces to add. */
   chaosLevel?: number;
+  /**
+   * A replacement rule to try first when this screen lays the position out, by
+   * name. A testing aid; it is ignored when {@link initialBoard} is given, since
+   * then someone else laid the position out.
+   */
+  replacementOverride?: string;
   /**
    * The position to start from, when someone other than this screen laid it
    * out. An online game uses the one the server sent; {@link chaosLevel} then
@@ -267,7 +273,10 @@ export default class ChessScreen implements Screen {
       // that has an AI player.
       const hasAi =
         options.white?.type === "ai" || options.black?.type === "ai";
-      this.game = ChessGame.defaultLayout(chaos, !hasAi);
+      const override = options.replacementOverride === undefined
+        ? undefined
+        : replacementRuleByName(options.replacementOverride);
+      this.game = ChessGame.defaultLayout(chaos, !hasAi, override);
     }
     this.visibleState = this.game.state;
     this.piecesInPlay = [

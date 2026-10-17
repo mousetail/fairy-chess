@@ -1047,3 +1047,58 @@ Deno.test("calling a game off without one is reported", () => {
 
   assert.match(client.last("error")?.message ?? "", /not in a game/);
 });
+
+Deno.test("a replacement override is used when a game is laid out", () => {
+  const lobby = deterministicLobby();
+  const first = new FakeClient("first");
+  const second = new FakeClient("second");
+
+  lobby.handleMessage(first, {
+    type: "join",
+    complexity: 1,
+    timeControl: 0,
+    name: "Ada",
+    replacementOverride: "Rook → Ring",
+  });
+  lobby.handleMessage(second, {
+    type: "join",
+    complexity: 1,
+    timeControl: 0,
+    name: "Bob",
+  });
+
+  const board = first.last("matched")?.board;
+  assert.ok(board, "the players should be matched");
+  // The override is applied first, so both colours have a ring.
+  assert.equal(board.pieces.filter((piece) => piece.type === "ring").length, 2);
+});
+
+Deno.test("when both players override the rule, one is chosen", () => {
+  const lobby = deterministicLobby();
+  const first = new FakeClient("first");
+  const second = new FakeClient("second");
+
+  lobby.handleMessage(first, {
+    type: "join",
+    complexity: 1,
+    timeControl: 0,
+    name: "Ada",
+    replacementOverride: "Rook → Ring",
+  });
+  lobby.handleMessage(second, {
+    type: "join",
+    complexity: 1,
+    timeControl: 0,
+    name: "Bob",
+    replacementOverride: "Bishop → Knishop",
+  });
+
+  const board = first.last("matched")?.board;
+  assert.ok(board, "the players should be matched");
+  // The coin came up low, so the waiting player's override is the one used.
+  assert.equal(board.pieces.filter((piece) => piece.type === "ring").length, 2);
+  assert.equal(
+    board.pieces.filter((piece) => piece.type === "knishop").length,
+    0,
+  );
+});

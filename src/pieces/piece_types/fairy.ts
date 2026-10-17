@@ -23,7 +23,7 @@ import { getPieceImageAsync } from "../utils.ts";
  *   magician       = xxU   (swap with any friendly piece)
  *   chimpanzee     = mU    (jump to any empty square)
  *   snake          = wB    (bishop that bounces off the walls)
- *   spider         = d(anchor)R (rook that drops anchors as it passes)
+ *   spider         = d(anchor)R (rook that drops anchors as it moves)
  *   anchor         = T     (dropped by the spider; destroyed at its owner's turn)
  *
  * The replace modifier is written `x` rather than the suggested `r`, because
@@ -185,7 +185,7 @@ const fairyPieces = {
     value: 5,
     displayName: "Spider",
     description:
-      "Slides like a rook, leaving an anchor on every square it passes over.",
+      "Slides like a rook, leaving an anchor on its starting square and every square it passes over.",
     diagram: {
       size: 5,
       rows: ["..x..", "..x..", "xxoxx", "..x..", "..x.."],

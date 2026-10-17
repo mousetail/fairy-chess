@@ -477,12 +477,13 @@ function generateMoves(
     !!state.lastMove?.passedTilesForEnPassant?.some(
       (passed) => passed.x === tile.x && passed.y === tile.y,
     );
-  // The pieces a move leaves behind on the squares it passed over, if any.
+  // The pieces a move leaves behind: one on the square it started from and one
+  // on every square it passed over, if the piece drops anything.
   const dropsFor = (
     path: Tile[],
   ): { tile: Tile; type: PieceType }[] | undefined =>
-    dropType && path.length > 0
-      ? path.map((tile) => ({ tile, type: dropType }))
+    dropType
+      ? [origin, ...path].map((tile) => ({ tile, type: dropType }))
       : undefined;
   const push = (tile: Tile, capture: boolean, path: Tile[] = []): void => {
     if (capture !== spec.capture) return;

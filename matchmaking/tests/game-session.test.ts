@@ -5,6 +5,7 @@ import type {
   MoveRejection,
 } from "../../src/online/protocol.ts";
 import { pieceTypeFromKey } from "../../src/online/serialization.ts";
+import { betzaFeatures } from "../../src/pieces/betza.ts";
 import {
   type AppliedMove,
   GameSession,
@@ -277,10 +278,16 @@ Deno.test("every chaos level lays out a playable board", () => {
       );
     }
 
-    // The symbol map has to cover every piece type in play, with no repeats,
-    // or the move log cannot name the pieces.
-    const inPlay = [...new Set(board.pieces.map((piece) => piece.type))].sort();
-    assert.deepEqual(Object.keys(board.symbols).sort(), inPlay);
+    // The symbol map has to cover every piece type in play, plus any piece a
+    // piece in play can drop, with no repeats, or the move log cannot name the
+    // pieces.
+    const inPlay = [...new Set(board.pieces.map((piece) => piece.type))];
+    const expected = new Set(inPlay);
+    for (const key of inPlay) {
+      const drop = betzaFeatures(pieceTypeFromKey(key).betza).drop;
+      if (drop !== undefined) expected.add(drop);
+    }
+    assert.deepEqual(Object.keys(board.symbols).sort(), [...expected].sort());
     const symbols = Object.values(board.symbols).map((symbol) =>
       symbol.toLowerCase()
     );

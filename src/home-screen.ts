@@ -5,6 +5,8 @@ import {
   loadDiscoveries,
   summarize,
 } from "./discoveries.ts";
+import { HomeScreenPieces } from "./home-screen-pieces.ts";
+import { ReplacementOverrideMenu } from "./replacement-override-menu.ts";
 import {
   type MatchmakingSession,
   type MatchmakingStatus,
@@ -78,6 +80,12 @@ export class HomeScreen implements Screen {
   private unwatch: (() => void) | null = null;
   /** The timer that counts the wait up on the Play button, while one runs. */
   private queueTimer: number | null = null;
+  /** The scrolling piece columns beside the menu, while the screen is showing. */
+  private pieces: HomeScreenPieces | null = null;
+  /** The replacement rule to try first, by name, or an empty string for none. */
+  private replacementOverride = "";
+  /** The secret menu that picks the replacement override, while the screen shows. */
+  private overrideMenu: ReplacementOverrideMenu | null = null;
 
   constructor(matchmaking: MatchmakingSession, options: HomeScreenOptions) {
     this.matchmaking = matchmaking;
@@ -90,6 +98,15 @@ export class HomeScreen implements Screen {
     const container = document.createElement("div");
     container.classList.add('home-screen-container')
     parent.appendChild(container);
+
+    // The columns sit in the blank space either side of the menu, so they are
+    // added to the screen's parent rather than to the menu itself. Three quick
+    // clicks on one open the secret replacement-rule menu.
+    this.replacementOverride = this.options.settings.replacementOverride ?? "";
+    this.pieces = new HomeScreenPieces({
+      onSecretGesture: (anchor) => this.openOverrideMenu(anchor),
+    });
+    this.pieces.mount(parent);
 
     const headerDiv = document.createElement('div');
 
@@ -257,16 +274,30 @@ export class HomeScreen implements Screen {
     historyButton.textContent = "Game history";
     actions.appendChild(historyButton);
 
-    const currentSettings = (): HomeScreenSettings => ({
-      mode: modeRadio.getValue() ?? modeOptions[0],
-      minTurnTime: minTurnTimeInput.value,
-      difficulty: difficultySlider.getValue(),
-      chaosLevel: chaosLevelSlider.getValue(),
-      timeControl: timeControlSlider.getValue(),
-      playerName: nameInput.value,
-    });
+    const currentSettings = (): HomeScreenSettings => {
+      const settings: HomeScreenSettings = {
+        mode: modeRadio.getValue() ?? modeOptions[0],
+        minTurnTime: minTurnTimeInput.value,
+        difficulty: difficultySlider.getValue(),
+        chaosLevel: chaosLevelSlider.getValue(),
+        timeControl: timeControlSlider.getValue(),
+        playerName: nameInput.value,
+      };
+      if (this.replacementOverride !== "") {
+        settings.replacementOverride = this.replacementOverride;
+      }
+      return settings;
+    };
     const report = () => this.options.onSettingsChange(currentSettings());
     container.addEventListener("change", report);
+
+    // The secret menu is kept off screen until a column is clicked three times.
+    this.overrideMenu = new ReplacementOverrideMenu((value) => {
+      this.replacementOverride = value;
+      report();
+    });
+    this.overrideMenu.setValue(this.replacementOverride);
+    this.overrideMenu.mount();
 
     const showQueueTime = () => {
       const began = this.matchmaking.searchStartedAt;
@@ -319,6 +350,7 @@ export class HomeScreen implements Screen {
           this.chaosLevelIndex(settings.chaosLevel),
           clampTimeControl(Number.parseInt(settings.timeControl, 10)),
           settings.playerName,
+          settings.replacementOverride,
         );
         return;
       }
@@ -371,8 +403,11 @@ export class HomeScreen implements Screen {
     chaosLevelValue: string,
   ): ChessScreenOptions {
     const chaosLevel = this.chaosLevelIndex(chaosLevelValue);
+    const replacementOverride = this.replacementOverride === ""
+      ? undefined
+      : this.replacementOverride;
 
-    if (mode !== "vs AI") return { chaosLevel };
+    if (mode !== "vs AI") return { chaosLevel, replacementOverride };
 
     const seconds = Number.parseFloat(minTurnTimeInput.value);
     const minTurnTimeMs =
@@ -389,7 +424,7 @@ export class HomeScreen implements Screen {
       difficulty,
       minTurnTimeMs,
     };
-    return { black: opponent, chaosLevel };
+    return { black: opponent, chaosLevel, replacementOverride };
   }
 
   createSlider(
@@ -463,10 +498,20 @@ export class HomeScreen implements Screen {
     this.queueTimer = null;
   }
 
+  /** Opens the secret menu that picks the replacement rule to try first. */
+  private openOverrideMenu(anchor: HTMLElement): void {
+    this.overrideMenu?.setValue(this.replacementOverride);
+    this.overrideMenu?.open(anchor);
+  }
+
   deactivate() {
     this.stopQueueTimer();
     this.unwatch?.();
     this.unwatch = null;
+    this.pieces?.destroy();
+    this.pieces = null;
+    this.overrideMenu?.destroy();
+    this.overrideMenu = null;
   }
 }
 

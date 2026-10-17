@@ -310,6 +310,16 @@ export const replacementRules: ReplacementRule[] = [
   pawnDoubleRowRule("Pawns → Pseudocheckers", pieceTypes.pseudocheckers),
 ];
 
+/**
+ * The rule with the given name, or `undefined` when no rule has it. Used to
+ * turn a testing override, which travels as a name, back into a rule.
+ */
+export function replacementRuleByName(
+  name: string,
+): ReplacementRule | undefined {
+  return replacementRules.find((rule) => rule.name === name);
+}
+
 /** A setting on the home screen's chaos slider. */
 export interface ChaosLevel {
   /** Label shown on the slider. */
@@ -355,6 +365,7 @@ export function applyChaos(
   level: ChaosLevel,
   random: Random,
   allowOnlineOnly = true,
+  override?: ReplacementRule,
 ): void {
   if (level.budget <= 0) return;
   // One roll decides the whole game: the king variants are only offered a
@@ -365,10 +376,19 @@ export function applyChaos(
       (!rule.replacesKing || allowKingVariants) &&
       (allowOnlineOnly || !rule.onlineOnly),
   );
+  // A testing override is offered before any random rule, but only when it is
+  // one of the rules this game may use and its complexity fits the level's
+  // budget. It can still be skipped: a rule the board cannot take is not applied.
+  const preferred =
+    override !== undefined &&
+      rules.includes(override) &&
+      override.complexity <= level.budget
+      ? override
+      : undefined;
   if (level.asymmetric) {
-    applyBalanced(board, rules, level.budget, random);
+    applyBalanced(board, rules, level.budget, random, preferred);
   } else {
-    applyRules(board, rules, ["white", "black"], level.budget, random);
+    applyRules(board, rules, ["white", "black"], level.budget, random, preferred);
   }
 }
 
@@ -382,8 +402,17 @@ function applyRules(
   colors: Color[],
   budget: number,
   random: Random,
+  preferred?: ReplacementRule,
 ): void {
   let spent = 0;
+  // The override is taken first, when it can be applied to every colour at once.
+  if (preferred !== undefined) {
+    const applied = applyToAll(preferred, board, colors, random);
+    if (applied.length > 0) {
+      board.pieces = applied[0].pieces;
+      spent += preferred.complexity;
+    }
+  }
   while (spent < budget) {
     const applicable: [ChessBoardState, ReplacementRule][] = rules.flatMap((rule) =>
       applyToAll(rule, board, colors, random).map(
@@ -406,10 +435,23 @@ function applyBalanced(
   rules: ReplacementRule[],
   budget: number,
   random: Random,
+  preferred?: ReplacementRule,
 ): void {
   const colors: Color[] = ["white", "black"];
   let turn = 0;
   let spent = 0;
+
+  // The override is taken first, for the first side that can take it while
+  // keeping the material balance.
+  if (preferred !== undefined) {
+    const applied = applyPreferredBalanced(board, preferred, colors, random);
+    if (applied !== undefined) {
+      board.pieces = applied.board.pieces;
+      spent += preferred.complexity;
+      turn = applied.colorIndex + 1;
+    }
+  }
+
   while (spent < budget) {
     let chosen: ChessBoardState | undefined;
     let rule: ReplacementRule | undefined;
@@ -426,8 +468,7 @@ function applyBalanced(
           let clone = cloneChessBoardState(board);
           if (rule.apply(clone, color, random)) {
             let newBalance = materialValue(clone, "white") - materialValue(clone, "black");
-            // Move towards a piece value balance
-            if (balance === 0 || (balance > 0 && newBalance <= balance) || (balance < 0 && newBalance >= balance)) {
+            if (keepsBalance(balance, newBalance)) {
               return [[clone, rule] satisfies [ChessBoardState, ReplacementRule]];
             }
           }
@@ -444,6 +485,37 @@ function applyBalanced(
     // The next side to pick is the one after whoever just moved.
     turn = chooser + 1;
   }
+}
+
+/**
+ * Applies `rule` to the first colour that can take it while keeping the
+ * material balance, which is how the asymmetric level offers a rule. Returns
+ * the board it produced and the index of the colour that took it, or
+ * `undefined` when no colour can.
+ */
+function applyPreferredBalanced(
+  board: ChessBoardState,
+  rule: ReplacementRule,
+  colors: Color[],
+  random: Random,
+): { board: ChessBoardState; colorIndex: number } | undefined {
+  const balance = materialValue(board, "white") - materialValue(board, "black");
+  for (const [index, color] of colors.entries()) {
+    const clone = cloneChessBoardState(board);
+    if (!rule.apply(clone, color, random.clone())) continue;
+    const newBalance = materialValue(clone, "white") - materialValue(clone, "black");
+    if (keepsBalance(balance, newBalance)) {
+      return { board: clone, colorIndex: index };
+    }
+  }
+  return undefined;
+}
+
+/** Whether moving from `balance` to `newBalance` is towards level material. */
+function keepsBalance(balance: number, newBalance: number): boolean {
+  return balance === 0 ||
+    (balance > 0 && newBalance <= balance) ||
+    (balance < 0 && newBalance >= balance);
 }
 
 /** The total point value of a colour's pieces on the board. */

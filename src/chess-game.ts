@@ -16,6 +16,7 @@ import {
   applyChaos,
   chaosLevels,
   type ChaosLevel,
+  type ReplacementRule,
 } from "./replacement-rules.ts";
 
 /**
@@ -177,6 +178,7 @@ export class ChessGame {
   static defaultLayout(
     chaos: ChaosLevel = chaosLevels[0],
     allowOnlineOnly = true,
+    override?: ReplacementRule,
   ): ChessGame {
     const board = new ChessGame();
     const back = [
@@ -231,6 +233,7 @@ export class ChessGame {
         Math.random() * 2**32,
       ),
       allowOnlineOnly,
+      override,
     );
     // A piece that drops another one needs that piece's symbol reserved too, so
     // the dropped pieces can be written down (in a FEN or a move log) as well.
