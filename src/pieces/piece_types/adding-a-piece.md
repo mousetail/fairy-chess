@@ -38,6 +38,22 @@ subset. Do not approximate: a `betza` that is close but not identical to the
 intended movement makes the AI disagree with the board, so leave such a piece
 unimplemented instead.
 
+### Features the engine cannot express
+
+Some pieces need a rule the engine has no notation for. Our parser understands a
+few such extensions (see the table at the end of `betza-modifiers.md`):
+
+- `w` — wall bounce: a rider reflects off the board edge,
+- `d(name)` — drop: leave a piece of the named type on every square passed over,
+- `U` — universal leaper: jump to any square on the board,
+- `x`/`xx` — replace: swap places with a friendly piece (required with `xx`),
+- `T` — temporary: destroyed at the start of its owner's turn.
+
+A piece that uses any of these cannot be played against the AI, so it must be
+marked `onlineOnly: true` (see step 2). `betzaFeatures` reports whether a
+notation uses one of them, and `getBehavior` throws when a piece's `onlineOnly`
+flag disagrees with its notation, so the two can never drift apart.
+
 Hoppers can be given a maximum range by appending a digit to the atom, e.g.
 `pW2` or `pF3`. The digit is the maximum distance from the origin square,
 counting the hurdle square — so `pF2` leaps an adjacent piece and lands two
@@ -60,6 +76,9 @@ Add an entry to the relevant object. The fields, all documented on the
   characters (`.` empty, `o` the piece, `x` move, `c` capture-only).
 - `promotionAbility` — `"deny"` to keep the piece out of promotion options,
   `"priority"` to make it the _only_ promotion target when it is in play.
+- `onlineOnly` — set on a piece whose movement uses a feature Fairy-Stockfish
+  cannot express (see step 1). Such a piece is kept out of a game with an AI
+  player, so it only appears in online and local games.
 
 Artwork is pulled from `src/images` with `getPieceImageAsync(category, name)`;
 reuse an existing image rather than adding one unless the piece really needs
@@ -88,6 +107,9 @@ both our move generation and the engine read them, so they cannot drift apart:
 `src/ai/variant.ts` builds the variant definition from the same `PieceType`
 fields, so nothing extra is needed for a piece to work as an AI opponent:
 
+- A piece marked `onlineOnly` is never handed to the engine: the chaos setup
+  keeps it out of a game with an AI player, and `buildVariantIni` throws if one
+  reaches it anyway.
 - If the `betza` string appears in the `builtInTypes` map, the piece is
   declared with Fairy-Stockfish's built-in type (for example `N` → `knight`,
   `RN` → `chancellor`). `Fairy-Stockfish/src/variants.ini` lists the built-in

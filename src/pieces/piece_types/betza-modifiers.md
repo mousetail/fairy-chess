@@ -77,6 +77,27 @@ A number after an atom sets its **range** (max repeats of that step); `0` = unli
 | **i**    | XBetza                                                             | Only legal for a "virgin" (never-moved) piece |
 | **d**    | (listed in ordering rule only; not otherwise defined in this text) |
 
+## Extensions beyond Fairy-Stockfish
+
+These are understood by our own parser (`src/pieces/betza.ts`) but not by
+Fairy-Stockfish, so a piece that uses one is marked `onlineOnly` and can only be
+played online or locally. `betzaFeatures` reports whether a notation uses any of
+them, and `getBehavior` throws when a piece's `onlineOnly` flag disagrees.
+
+| Symbol    | Type     | Meaning                                                                                        |
+| --------- | -------- | ---------------------------------------------------------------------------------------------- |
+| **w**     | Modifier | Wall bounce: a rider reflects off the board edge and carries on                                |
+| **d(name)** | Modifier | Drop: leave a piece of the named type on every square the move passes over                     |
+| **U**     | Atom     | Universal leaper: jump to any square on the board                                              |
+| **x**     | Modifier | Replace: may move onto a friendly piece and swap places with it                                |
+| **xx**    | Modifier | Replace, required: may _only_ move onto a friendly piece and swap places with it               |
+| **T**     | Atom     | Temporary: the piece is destroyed at the start of its owner's turn                             |
+
+The replace modifier is written `x` (exchange) rather than `r`, because `r` is
+already the "right" direction modifier. The `d(name)` name is a key in the piece
+registry, e.g. `d(anchor)R` is a rook that drops an anchor on every square it
+passes over.
+
 ### Special case: modifiers on `@` (drops)
 
 Since directions don't apply to a drop, these letters are repurposed:

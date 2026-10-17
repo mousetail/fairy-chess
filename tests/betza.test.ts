@@ -136,8 +136,14 @@ async function assertBetzasMatchEngine(
 test("every piece type's Betza notation matches the engine", async () => {
   const engine = await createEngine();
   try {
+    // Pieces marked online only use features Fairy-Stockfish cannot express, so
+    // there is nothing to compare them against.
     const betzas = [
-      ...new Set(Object.values(pieceTypes).map((type: PieceType) => type.betza)),
+      ...new Set(
+        Object.values(pieceTypes)
+          .filter((type: PieceType) => !type.onlineOnly)
+          .map((type: PieceType) => type.betza),
+      ),
     ];
     await assertBetzasMatchEngine(engine, "piece", betzas);
   } finally {

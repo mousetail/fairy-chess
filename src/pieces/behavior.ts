@@ -4,11 +4,36 @@ import type {
   SpecialMovement,
 } from "../chess-board.ts";
 import type { Tile } from "../chess-tile.ts";
-import { betzaBehavior, type Behavior } from "./betza.ts";
+import {
+  assertBetzaCompatibility,
+  betzaBehavior,
+  betzaFeatures,
+  type Behavior,
+  type BetzaFeatures,
+} from "./betza.ts";
 import pieceTypes, { type PieceType } from "./piece_types/index.ts";
 import { getPromotionOptions } from "./promotion.ts";
 
 const cache = new WeakMap<PieceType, Behavior>();
+const featureCache = new WeakMap<PieceType, BetzaFeatures>();
+
+/** The Betza features of a piece type, parsed once and cached. */
+function getFeatures(type: PieceType): BetzaFeatures {
+  let features = featureCache.get(type);
+  if (!features) {
+    features = betzaFeatures(type.betza);
+    featureCache.set(type, features);
+  }
+  return features;
+}
+
+/**
+ * Whether the piece is destroyed at the start of its owner's turn, which the
+ * `T` (temporary) atom marks.
+ */
+export function isTemporary(type: PieceType): boolean {
+  return getFeatures(type).temporary;
+}
 
 /**
  * The movement of a piece type, derived from its Betza notation and the rest of
@@ -25,7 +50,16 @@ export function getBehavior(type: PieceType): Behavior {
 }
 
 function buildBehavior(type: PieceType): Behavior {
-  const base = betzaBehavior(type.betza, { enPassant: type.canEnPassant });
+  // A piece is online/local only exactly when its notation uses a feature
+  // Fairy-Stockfish cannot express. The registry checks this when it is built;
+  // repeating it here keeps a piece type made on the fly (as the tests do) in
+  // line as well.
+  assertBetzaCompatibility(type);
+
+  const base = betzaBehavior(type.betza, {
+    enPassant: type.canEnPassant,
+    resolveDrop: (name) => pieceTypes[name],
+  });
   const region = type.mobilityRegion
     ? {
         white: parseRegion(type.mobilityRegion.white),

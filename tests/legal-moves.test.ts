@@ -88,6 +88,9 @@ test("every piece type's legal moves match the engine", async () => {
   const engine = await createEngine();
   try {
     for (const type of Object.values(pieceTypes) as PieceType[]) {
+      // Pieces marked online only use features Fairy-Stockfish cannot express,
+      // so the engine cannot be asked to play them.
+      if (type.onlineOnly) continue;
       // A royal piece is its own king, so it replaces the classic king in the
       // variant and on the board; everything else needs a classic king.
       const kingType = type.royal ? type : pieceTypes.king;

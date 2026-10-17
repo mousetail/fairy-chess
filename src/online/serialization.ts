@@ -60,6 +60,10 @@ export interface SerializedMove {
   promotion?: string;
   castling?: { pieceId: number; destination: Tile };
   passedTilesForEnPassant?: Tile[];
+  /** The id of the friendly piece this move swaps places with, if any. */
+  swap?: number;
+  /** Pieces this move leaves behind, on the squares it passed over. */
+  drops?: { tile: Tile; type: string }[];
 }
 
 export interface SerializedBoardState {
@@ -129,6 +133,15 @@ export function serializeMove(move: TaggedMove): SerializedMove {
     serialized.passedTilesForEnPassant = move.passedTilesForEnPassant.map(
       (tile) => ({ ...tile }),
     );
+  }
+  if (move.swap) {
+    serialized.swap = move.swap.id;
+  }
+  if (move.drops) {
+    serialized.drops = move.drops.map((drop) => ({
+      tile: { ...drop.tile },
+      type: pieceTypeKey(drop.type),
+    }));
   }
   return serialized;
 }
@@ -206,6 +219,18 @@ export function deserializeMove(
     move.passedTilesForEnPassant = serialized.passedTilesForEnPassant.map(
       (tile) => ({ x: tile.x, y: tile.y }),
     );
+  }
+  if (serialized.swap !== undefined) {
+    const other = state.pieces.find(
+      (candidate) => candidate.id === serialized.swap,
+    );
+    if (other) move.swap = other;
+  }
+  if (serialized.drops) {
+    move.drops = serialized.drops.map((drop) => ({
+      tile: { x: drop.tile.x, y: drop.tile.y },
+      type: pieceTypeFromKey(drop.type),
+    }));
   }
   return move;
 }

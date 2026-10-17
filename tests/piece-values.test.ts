@@ -109,6 +109,9 @@ function engineValue(betza: string): number {
 test("every piece type's value matches the engine's estimate", () => {
   const mismatches: string[] = [];
   for (const [name, type] of Object.entries(pieceTypes)) {
+    // Pieces marked online only use features Fairy-Stockfish cannot express, so
+    // the engine has no estimate to compare against.
+    if (type.onlineOnly) continue;
     const estimate = engineValue(type.betza);
     // Our values are rough integers, so a difference of up to one point is
     // treated as a match.

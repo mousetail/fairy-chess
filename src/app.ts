@@ -19,14 +19,6 @@ import {
 
 /**
  * The application: the screen on show, and whatever outlives it.
- *
- * Every change of screen goes through here, so the screen being replaced is
- * always the screen that was on show, and can always be taken down properly.
- *
- * The matchmaking session lives here too rather than in a screen. Waiting for an
- * opponent is not a page of its own — the player carries on reading their
- * discoveries, and the board takes over whichever screen is up when somebody
- * turns up to play.
  */
 export class App {
   private readonly parent: HTMLElement;

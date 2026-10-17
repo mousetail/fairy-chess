@@ -1,5 +1,5 @@
 import { tileToAlgebraic, type Tile } from "./chess-tile.ts";
-import { getBehavior } from "./pieces/behavior.ts";
+import { getBehavior, isTemporary } from "./pieces/behavior.ts";
 import type { PieceType } from "./pieces/piece_types/index.ts";
 import pieceTypes from "./pieces/piece_types/index.ts";
 
@@ -9,6 +9,16 @@ export type SpecialMovement = {
   promotion?: Promotion;
   castling?: Castle;
   passedTilesForEnPassant?: Tile[];
+  /**
+   * A friendly piece this move trades places with, instead of moving to an
+   * empty square or capturing. Set by the `x`/`xx` replace modifier.
+   */
+  swap?: Piece;
+  /**
+   * Pieces this move leaves behind on the squares it passed over. Set by the
+   * `d(name)` drop modifier.
+   */
+  drops?: { tile: Tile; type: PieceType }[];
 };
 
 export function specialMovementToPgn(
@@ -200,38 +210,75 @@ export function applyMove(
   destroyPiece: (piece: number) => void,
   addPiece: (piece: Piece) => void,
 ) {
-  let piece = state.pieces.find((p) => p.id === move.piece.id)!;
-  let previousPiecePosition = piece.position;
+  const piece = state.pieces.find((p) => p.id === move.piece.id)!;
+  const previousPiecePosition = piece.position;
 
-  let pieceAtTile =
-    getPieceAt(state, move.to) ??
-    (state.lastMove?.passedTilesForEnPassant?.find(
-      (t) => t.x === move.to.x && t.y === move.to.y,
-    ) &&
-      getPieceAt(state, state.lastMove.to!));
-  if (pieceAtTile) {
-    state.pieces = state.pieces.filter((p) => p !== pieceAtTile);
-    destroyPiece(pieceAtTile.id);
-  }
-  piece.position = move.to;
-  piece.hasMoved = true;
-  const castling = move.castling;
-  if (castling !== undefined) {
-    const rook = state.pieces.find((p) => p.id === castling.piece.id)!;
-    rook.position = castling.destination;
-    rook.hasMoved = true;
-    movePiece(rook.id, castling.destination);
-  }
-  movePiece(piece.id, move.to);
+  if (move.swap) {
+    // The piece trades places with a friendly piece rather than capturing it.
+    const other = state.pieces.find((p) => p.id === move.swap!.id)!;
+    other.position = previousPiecePosition;
+    other.hasMoved = true;
+    piece.position = move.to;
+    piece.hasMoved = true;
+    movePiece(other.id, other.position);
+    movePiece(piece.id, piece.position);
+  } else {
+    const pieceAtTile =
+      getPieceAt(state, move.to) ??
+      (state.lastMove?.passedTilesForEnPassant?.find(
+        (t) => t.x === move.to.x && t.y === move.to.y,
+      ) &&
+        getPieceAt(state, state.lastMove.to!));
+    if (pieceAtTile) {
+      state.pieces = state.pieces.filter((p) => p !== pieceAtTile);
+      destroyPiece(pieceAtTile.id);
+    }
+    piece.position = move.to;
+    piece.hasMoved = true;
+    const castling = move.castling;
+    if (castling !== undefined) {
+      const rook = state.pieces.find((p) => p.id === castling.piece.id)!;
+      rook.position = castling.destination;
+      rook.hasMoved = true;
+      movePiece(rook.id, castling.destination);
+    }
+    movePiece(piece.id, move.to);
 
-  if (move.promotion) {
-    const promoted = { ...piece, type: move.promotion.piece };
-    state.pieces = state.pieces.map((p) => (p.id === piece.id ? promoted : p));
-    destroyPiece(piece.id);
-    addPiece(promoted);
+    if (move.promotion) {
+      const promoted = { ...piece, type: move.promotion.piece };
+      state.pieces = state.pieces.map((p) => (p.id === piece.id ? promoted : p));
+      destroyPiece(piece.id);
+      addPiece(promoted);
+    }
+  }
+
+  // A dropping piece leaves a new piece on every square it passed over.
+  if (move.drops && move.drops.length > 0) {
+    let nextId = state.pieces.reduce((max, p) => Math.max(max, p.id), -1) + 1;
+    for (const drop of move.drops) {
+      const dropped: Piece = {
+        type: drop.type,
+        color: piece.color,
+        position: drop.tile,
+        hasMoved: false,
+        id: nextId++,
+      };
+      state.pieces.push(dropped);
+      addPiece(dropped);
+    }
   }
 
   state.lastMove = { ...move, from: previousPiecePosition, piece };
 
   state.turn = invertColor(state.turn);
+
+  // A temporary piece is destroyed at the start of its owner's turn, which is
+  // the turn that is just beginning.
+  const expiring = state.pieces.filter(
+    (p) => p.color === state.turn && isTemporary(p.type),
+  );
+  if (expiring.length > 0) {
+    state.pieces = state.pieces.filter((p) => !expiring.includes(p));
+    for (const p of expiring) destroyPiece(p.id);
+  }
 }

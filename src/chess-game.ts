@@ -9,6 +9,7 @@ import {
   type TaggedMove,
 } from "./chess-board.ts";
 import type { Tile } from "./chess-tile.ts";
+import { betzaFeatures } from "./pieces/betza.ts";
 import pieceTypes, { type PieceType } from "./pieces/piece_types/index.ts";
 import { Xoshiro128ss } from "./random.ts";
 import {
@@ -173,7 +174,10 @@ export class ChessGame {
     }
   }
 
-  static defaultLayout(chaos: ChaosLevel = chaosLevels[0]): ChessGame {
+  static defaultLayout(
+    chaos: ChaosLevel = chaosLevels[0],
+    allowOnlineOnly = true,
+  ): ChessGame {
     const board = new ChessGame();
     const back = [
       pieceTypes.rook,
@@ -217,10 +221,26 @@ export class ChessGame {
         id: x + 24,
       });
     }
-    applyChaos(board.state, chaos, new Xoshiro128ss(Math.random() * 2**32, Math.random() * 2**32, Math.random() * 2**32, Math.random() * 2**32));
-    board.state.symbols = resolveSymbols(
-      new Set(board.state.pieces.map((piece) => piece.type))
+    applyChaos(
+      board.state,
+      chaos,
+      new Xoshiro128ss(
+        Math.random() * 2**32,
+        Math.random() * 2**32,
+        Math.random() * 2**32,
+        Math.random() * 2**32,
+      ),
+      allowOnlineOnly,
     );
+    // A piece that drops another one needs that piece's symbol reserved too, so
+    // the dropped pieces can be written down (in a FEN or a move log) as well.
+    const types = new Set(board.state.pieces.map((piece) => piece.type));
+    for (const type of [...types]) {
+      const drop = betzaFeatures(type.betza).drop;
+      const dropped = drop === undefined ? undefined : pieceTypes[drop];
+      if (dropped) types.add(dropped);
+    }
+    board.state.symbols = resolveSymbols(types);
     return board;
   }
 }

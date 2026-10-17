@@ -258,7 +258,12 @@ export default class ChessScreen implements Screen {
       this.game.state = deserializeBoardState(options.initialBoard);
     } else {
       const chaos = chaosLevels[options.chaosLevel ?? 0] ?? chaosLevels[0];
-      this.game = ChessGame.defaultLayout(chaos);
+      // The AI cannot be taught a piece whose movement uses a feature
+      // Fairy-Stockfish cannot express, so those pieces are kept out of a game
+      // that has an AI player.
+      const hasAi =
+        options.white?.type === "ai" || options.black?.type === "ai";
+      this.game = ChessGame.defaultLayout(chaos, !hasAi);
     }
     this.visibleState = this.game.state;
     this.piecesInPlay = [

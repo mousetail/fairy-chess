@@ -17,6 +17,17 @@ import { getPieceImageAsync } from "../utils.ts";
  * The wazir and ferz are promotion priorities: a game that fields one of them
  * offers only that piece (or, when both are in play, the two of them) as
  * promotion targets.
+ *
+ * The last five pieces use Betza features Fairy-Stockfish cannot express, so
+ * they are marked `onlineOnly` and never enter a game played against the AI:
+ *   magician       = xxU   (swap with any friendly piece)
+ *   chimpanzee     = mU    (jump to any empty square)
+ *   snake          = wB    (bishop that bounces off the walls)
+ *   spider         = d(anchor)R (rook that drops anchors as it passes)
+ *   anchor         = T     (dropped by the spider; destroyed at its owner's turn)
+ *
+ * The replace modifier is written `x` rather than the suggested `r`, because
+ * `r` is already the "right" direction modifier.
  */
 const fairyPieces = {
   wazir: {
@@ -121,6 +132,80 @@ const fairyPieces = {
       rows: ["x.x.x", ".cxc.", "xxoxx", ".xxx.", "x.x.x"],
     },
     promotionAbility: "always",
+  },
+  magician: {
+    symbol: "g",
+    betza: "xxU",
+    onlineOnly: true,
+    fallbackSymbols: ["m", "a", "e"],
+    image: getPieceImageAsync("fantasy", "mage"),
+    value: 5,
+    displayName: "Magician",
+    description:
+      "Swaps places with any friendly piece; cannot move or capture otherwise.",
+    diagram: {
+      size: 5,
+      rows: ["xxxxx", "xxxxx", "xxoxx", "xxxxx", "xxxxx"],
+    },
+  },
+  chimpanzee: {
+    symbol: "h",
+    betza: "mU",
+    onlineOnly: true,
+    fallbackSymbols: ["i", "o", "n"],
+    image: getPieceImageAsync("nature", "chimpanzee"),
+    value: 4,
+    displayName: "Chimpanzee",
+    description: "Moves to any empty square on the board; cannot capture.",
+    diagram: {
+      size: 5,
+      rows: ["xxxxx", "xxxxx", "xxoxx", "xxxxx", "xxxxx"],
+    },
+  },
+  snake: {
+    symbol: "s",
+    betza: "wB",
+    onlineOnly: true,
+    fallbackSymbols: ["n", "k", "v"],
+    image: getPieceImageAsync("nature", "snake"),
+    value: 4,
+    displayName: "Snake",
+    description: "Slides diagonally, bouncing off the board edges.",
+    diagram: {
+      size: 5,
+      rows: ["x...x", ".x.x.", "..o..", ".x.x.", "x...x"],
+    },
+  },
+  spider: {
+    symbol: "p",
+    betza: "d(anchor)R",
+    onlineOnly: true,
+    fallbackSymbols: ["r", "d", "t"],
+    image: getPieceImageAsync("nature", "spider"),
+    value: 5,
+    displayName: "Spider",
+    description:
+      "Slides like a rook, leaving an anchor on every square it passes over.",
+    diagram: {
+      size: 5,
+      rows: ["..x..", "..x..", "xxoxx", "..x..", "..x.."],
+    },
+  },
+  anchor: {
+    symbol: "a",
+    betza: "T",
+    onlineOnly: true,
+    promotionAbility: "deny",
+    fallbackSymbols: ["o", "e", "x"],
+    image: getPieceImageAsync("restrictors", "anchor"),
+    value: 0,
+    displayName: "Anchor",
+    description:
+      "Cannot move; disappears at the start of its owner's next turn.",
+    diagram: {
+      size: 5,
+      rows: [".....", ".....", "..o..", ".....", "....."],
+    },
   },
 } satisfies Record<string, PieceType>;
 

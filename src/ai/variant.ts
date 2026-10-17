@@ -50,6 +50,14 @@ export function buildVariantIni(
   const lines = [`[${name}]`];
   let customIndex = 1;
   for (const [type, symbol] of state.symbols) {
+    // A piece whose movement uses a feature Fairy-Stockfish cannot express can
+    // only be played online or locally; the chaos setup keeps such pieces out
+    // of a game with an AI, so reaching here means something has gone wrong.
+    if (type.onlineOnly) {
+      throw new Error(
+        `Fairy-Stockfish cannot play ${type.displayName}, which is online/local only`,
+      );
+    }
     const letter = symbol.toLowerCase();
     let pieceName: string;
     if (type.royal) {

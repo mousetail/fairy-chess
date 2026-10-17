@@ -4,6 +4,7 @@ import fairyPieces from "./fairy.ts";
 import kingPieces from "./kings.ts";
 import pawnPieces from "./pawns.ts";
 
+import { assertBetzaCompatibility } from "../betza.ts";
 import type { PieceDiagram } from "../diagram.ts";
 import type { LazyImage } from "../utils.ts";
 
@@ -76,6 +77,17 @@ export interface PieceType {
    * `ai/variant.ts` lists the piece in the engine's `promotionPawnTypes`.
    */
   promotesLikePawn?: boolean;
+  /**
+   * Whether this piece can only be used in online or local (human vs human)
+   * games, because its movement uses a feature Fairy-Stockfish cannot express.
+   * A game that fields such a piece cannot be played against the AI, so the
+   * chaos setup keeps these pieces out of a game that has an AI player.
+   *
+   * This must agree with the piece's `betza`: {@link getBehavior} throws when a
+   * notation that uses an unsupported feature is not marked online only, or when
+   * one that does not is.
+   */
+  onlineOnly?: boolean;
   /** Approximate point value, in pawns, used to compare material. */
   value: number;
 }
@@ -87,5 +99,13 @@ const pieceTypes: Record<string, PieceType> = {
   ...pawnPieces,
   ...kingPieces,
 } satisfies Record<string, PieceType>;
+
+// Every piece's `onlineOnly` flag has to agree with whether its Betza notation
+// uses a feature Fairy-Stockfish cannot express. Checking here means a
+// misconfigured piece fails as soon as the registry is built, rather than when
+// the AI is first asked to play it.
+for (const type of Object.values(pieceTypes)) {
+  assertBetzaCompatibility(type);
+}
 
 export default pieceTypes;

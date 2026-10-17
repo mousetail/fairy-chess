@@ -4,6 +4,7 @@ import type {
   SpecialMovement,
 } from "../chess-board.ts";
 import type { Tile } from "../chess-tile.ts";
+import type { PieceType } from "./piece_types/index.ts";
 
 /**
  * A piece's movement: given a piece and the board, the squares it may move to.
@@ -23,11 +24,43 @@ interface MoveSpec {
   direction: Tile;
   /** Whether the pattern is a capture; otherwise it is a quiet move. */
   capture: boolean;
-  kind: "step" | "rider" | "hopper" | "lame";
+  kind: "step" | "rider" | "hopper" | "lame" | "universal";
   /** Maximum distance; `0` means unlimited. */
   limit: number;
   /** Whether the pattern is only available before the piece has moved. */
   initial: boolean;
+  /**
+   * Whether the rider bounces off the board edge instead of stopping there.
+   * Set by the `w` (wall bounce) modifier.
+   */
+  wallBounce?: boolean;
+  /**
+   * How the pattern treats a square holding a friendly piece. `"optional"`
+   * (the `x` modifier) adds a swap with that piece to the pattern's normal
+   * moves; `"required"` (the `xx` modifier) allows only the swap.
+   */
+  replace?: "optional" | "required";
+}
+
+/**
+ * The features a Betza string can use that go beyond the movement patterns
+ * Fairy-Stockfish understands. They are what makes a piece online/local only:
+ * the engine cannot be taught them, so a game that fields such a piece cannot
+ * be played against the AI.
+ */
+export interface BetzaFeatures {
+  /**
+   * The piece type dropped on every square the piece passes over, named as in
+   * the `d(name)` modifier, if the notation uses one.
+   */
+  drop?: string;
+  /** Whether the piece is destroyed at the start of its owner's turn (`T`). */
+  temporary: boolean;
+  /**
+   * Whether the notation uses any feature Fairy-Stockfish cannot express, so
+   * the piece can only be used in online or local games.
+   */
+  stockfishIncompatible: boolean;
 }
 
 /**
@@ -106,11 +139,25 @@ function isDigit(character: string): boolean {
 }
 
 /**
- * Parses a Betza string into the move patterns it describes, following
- * Fairy-Stockfish's `from_betza`. Only the subset the engine supports is
- * understood; unknown characters (such as the `e` en-passant flag) are ignored.
+ * Parses a Betza string into the move patterns it describes and the extra
+ * features it uses, following Fairy-Stockfish's `from_betza` for the subset the
+ * engine supports. Unknown characters (such as the `e` en-passant flag) are
+ * ignored.
+ *
+ * The extensions beyond that subset are:
+ *   w        wall bounce: a rider reflects off the board edge
+ *   d(name)  drop: leave a piece of the named type on every square passed over
+ *   U        universal leaper: jump to any square on the board
+ *   x        replace: may swap with a friendly piece (xx requires the swap)
+ *   T        temporary: destroyed at the start of its owner's turn
+ *
+ * `r` is already the "right" direction modifier, so the replace modifier uses
+ * `x` (exchange) instead.
  */
-export function parseBetza(betza: string): MoveSpec[] {
+function parseBetzaInternal(betza: string): {
+  specs: MoveSpec[];
+  features: BetzaFeatures;
+} {
   // Fairy-Stockfish stores the moves of a piece in maps keyed by direction, one
   // per movement kind, modality and initial flag, so a direction that several
   // atoms select is only stored once. Mirror that by keying the patterns the
@@ -123,7 +170,13 @@ export function parseBetza(betza: string): MoveSpec[] {
   let lame = false;
   let initial = false;
   let limit = 0;
+  let wallBounce = false;
+  let replace: "optional" | "required" | undefined = undefined;
   let prelimDirections: string[] = [];
+
+  let drop: string | undefined = undefined;
+  let temporary = false;
+  let incompatible = false;
 
   const reset = () => {
     quiet = false;
@@ -133,8 +186,13 @@ export function parseBetza(betza: string): MoveSpec[] {
     lame = false;
     initial = false;
     limit = 0;
+    wallBounce = false;
+    replace = undefined;
     prelimDirections = [];
   };
+
+  const specKey = (spec: MoveSpec): string =>
+    `${spec.kind}|${spec.capture}|${spec.initial}|${spec.direction.x},${spec.direction.y}|${spec.replace ?? ""}|${spec.wallBounce ?? false}`;
 
   for (let i = 0; i < betza.length; i++) {
     const character = betza[i];
@@ -151,6 +209,51 @@ export function parseBetza(betza: string): MoveSpec[] {
       lame = true;
     } else if (character === "i") {
       initial = true;
+    } else if (character === "w") {
+      // Wall bounce: a rider reflects off the edge instead of stopping.
+      wallBounce = true;
+      incompatible = true;
+    } else if (character === "x") {
+      // Replace: swap with a friendly piece. `xx` requires the swap.
+      if (betza[i + 1] === "x") {
+        replace = "required";
+        i++;
+      } else {
+        replace = "optional";
+      }
+      incompatible = true;
+    } else if (character === "d") {
+      // Drop: leave a piece of the named type on every square passed over.
+      const match = /^\(([^)]+)\)/.exec(betza.slice(i + 1));
+      if (!match) {
+        throw new Error(`Malformed drop modifier in Betza "${betza}"`);
+      }
+      drop = match[1];
+      i += match[0].length;
+      incompatible = true;
+    } else if (character === "U") {
+      // Universal leaper: jump to any square on the board.
+      incompatible = true;
+      const modalities = quiet || capture ? [quiet, capture] : [true, true];
+      for (let modality = 0; modality < 2; modality++) {
+        if (!modalities[modality]) continue;
+        const spec: MoveSpec = {
+          direction: { x: 0, y: 0 },
+          capture: modality === 1,
+          kind: "universal",
+          limit: 0,
+          initial,
+          wallBounce,
+          replace,
+        };
+        specs.set(specKey(spec), spec);
+      }
+      reset();
+    } else if (character === "T") {
+      // Temporary: destroyed at the start of its owner's turn.
+      temporary = true;
+      incompatible = true;
+      reset();
     } else if (
       VERTICALS.includes(character) ||
       HORIZONTALS.includes(character)
@@ -211,11 +314,10 @@ export function parseBetza(betza: string): MoveSpec[] {
               kind,
               limit,
               initial,
+              wallBounce,
+              replace,
             };
-            specs.set(
-              `${kind}|${spec.capture}|${initial}|${spec.direction.x},${spec.direction.y}`,
-              spec,
-            );
+            specs.set(specKey(spec), spec);
           }
         }
       }
@@ -223,7 +325,45 @@ export function parseBetza(betza: string): MoveSpec[] {
     }
   }
 
-  return [...specs.values()];
+  return {
+    specs: [...specs.values()],
+    features: { drop, temporary, stockfishIncompatible: incompatible },
+  };
+}
+
+/**
+ * Parses a Betza string into the move patterns it describes, following
+ * Fairy-Stockfish's `from_betza`. Only the subset the engine supports is
+ * understood; unknown characters (such as the `e` en-passant flag) are ignored.
+ */
+export function parseBetza(betza: string): MoveSpec[] {
+  return parseBetzaInternal(betza).specs;
+}
+
+/**
+ * The features a Betza string uses beyond Fairy-Stockfish's subset. A piece
+ * whose notation uses any of them can only be played online or locally.
+ */
+export function betzaFeatures(betza: string): BetzaFeatures {
+  return parseBetzaInternal(betza).features;
+}
+
+/**
+ * Throws when a piece's `onlineOnly` flag disagrees with whether its Betza
+ * notation uses a feature Fairy-Stockfish cannot express. The two must agree:
+ * a piece the engine cannot play must be marked online only, and one it can
+ * play must not be, or the AI would be handed a piece it cannot handle (or a
+ * piece would be kept from it needlessly).
+ */
+export function assertBetzaCompatibility(type: PieceType): void {
+  const incompatible = betzaFeatures(type.betza).stockfishIncompatible;
+  if (incompatible !== (type.onlineOnly === true)) {
+    throw new Error(
+      `Piece "${type.displayName}" has onlineOnly=${type.onlineOnly ?? false} ` +
+        `but its Betza "${type.betza}" is ` +
+        `${incompatible ? "" : "not "}Fairy-Stockfish incompatible`,
+    );
+  }
 }
 
 /** The Chebyshev distance of a direction, as Fairy-Stockfish's `dist` computes it. */
@@ -269,6 +409,11 @@ export interface BetzaOptions {
    * passed over on its last double step count as capturable.
    */
   enPassant?: boolean;
+  /**
+   * Resolves the piece name in a `d(name)` drop modifier to the piece type it
+   * names. Required for a notation that uses a drop.
+   */
+  resolveDrop?: (name: string) => PieceType | undefined;
 }
 
 /**
@@ -280,13 +425,22 @@ export function betzaBehavior(
   betza: string,
   options: BetzaOptions = {},
 ): Behavior {
-  const specs = parseBetza(betza);
+  const { specs, features } = parseBetzaInternal(betza);
+  let dropType: PieceType | undefined;
+  if (features.drop !== undefined) {
+    dropType = options.resolveDrop?.(features.drop);
+    if (dropType === undefined) {
+      throw new Error(
+        `Unknown drop piece "${features.drop}" in Betza "${betza}"`,
+      );
+    }
+  }
   return (piece, state) => {
     const moves: SpecialMovement[] = [];
     for (const spec of specs) {
       if (spec.initial && piece.hasMoved) continue;
       const direction = rotate(spec.direction, piece.color);
-      generateMoves(spec, direction, piece, state, options, moves);
+      generateMoves(spec, direction, piece, state, options, moves, dropType);
     }
     // Several patterns may reach the same square (for example a rider and a
     // step in the same direction); Fairy-Stockfish merges those, so we do too.
@@ -307,6 +461,7 @@ function generateMoves(
   state: ChessBoardState,
   options: BetzaOptions,
   moves: SpecialMovement[],
+  dropType: PieceType | undefined,
 ): void {
   const origin = piece.position;
   const at = (distance: number): Tile => ({
@@ -322,11 +477,51 @@ function generateMoves(
     !!state.lastMove?.passedTilesForEnPassant?.some(
       (passed) => passed.x === tile.x && passed.y === tile.y,
     );
-  const push = (tile: Tile, capture: boolean): void => {
-    if (capture === spec.capture) {
-      moves.push({ to: tile, type: capture ? "capture" : "move" });
-    }
+  // The pieces a move leaves behind on the squares it passed over, if any.
+  const dropsFor = (
+    path: Tile[],
+  ): { tile: Tile; type: PieceType }[] | undefined =>
+    dropType && path.length > 0
+      ? path.map((tile) => ({ tile, type: dropType }))
+      : undefined;
+  const push = (tile: Tile, capture: boolean, path: Tile[] = []): void => {
+    if (capture !== spec.capture) return;
+    const move: SpecialMovement = {
+      to: tile,
+      type: capture ? "capture" : "move",
+    };
+    const drops = dropsFor(path);
+    if (drops) move.drops = drops;
+    moves.push(move);
   };
+  // A swap with a friendly piece is a quiet move that carries the piece it
+  // trades places with.
+  const pushSwap = (tile: Tile, other: Piece, path: Tile[] = []): void => {
+    const move: SpecialMovement = { to: tile, type: "move", swap: other };
+    const drops = dropsFor(path);
+    if (drops) move.drops = drops;
+    moves.push(move);
+  };
+
+  if (spec.kind === "universal") {
+    for (let x = 0; x < 8; x++) {
+      for (let y = 0; y < 8; y++) {
+        if (x === origin.x && y === origin.y) continue;
+        const tile = { x, y };
+        const occupant = occupantAt(tile);
+        if (occupant) {
+          if (occupant.color !== piece.color) {
+            if (spec.replace !== "required") push(tile, true);
+          } else if (spec.replace) {
+            pushSwap(tile, occupant);
+          }
+        } else if (spec.replace !== "required") {
+          push(tile, false);
+        }
+      }
+    }
+    return;
+  }
 
   if (spec.kind === "step" || spec.kind === "lame") {
     if (chebyshev(direction) > 3) return;
@@ -342,18 +537,29 @@ function generateMoves(
     }
     const occupant = occupantAt(to);
     if (occupant) {
-      if (occupant.color !== piece.color) push(to, true);
-    } else if (isPassedTile(to) && spec.capture) {
-      // The passed square is empty, but an en-passant capture lands on it.
-      push(to, true);
-    } else {
-      push(to, false);
+      if (occupant.color !== piece.color) {
+        if (spec.replace !== "required") push(to, true);
+      } else if (spec.replace) {
+        pushSwap(to, occupant);
+      }
+    } else if (spec.replace !== "required") {
+      if (isPassedTile(to) && spec.capture) {
+        // The passed square is empty, but an en-passant capture lands on it.
+        push(to, true);
+      } else {
+        push(to, false);
+      }
     }
     return;
   }
 
   if (spec.kind === "rider") {
     if (chebyshev(direction) > 2) return;
+    if (spec.wallBounce) {
+      generateBounceMoves(spec, direction, piece, occupantAt, push, pushSwap);
+      return;
+    }
+    const path: Tile[] = [];
     for (
       let distance = 1;
       spec.limit === 0 || distance <= spec.limit;
@@ -363,10 +569,15 @@ function generateMoves(
       if (!inBounds(to)) break;
       const occupant = occupantAt(to);
       if (occupant) {
-        if (occupant.color !== piece.color) push(to, true);
+        if (occupant.color !== piece.color) {
+          if (spec.replace !== "required") push(to, true, path);
+        } else if (spec.replace) {
+          pushSwap(to, occupant, path);
+        }
         break;
       }
-      push(to, false);
+      if (spec.replace !== "required") push(to, false, path);
+      path.push(to);
     }
     return;
   }
@@ -393,5 +604,53 @@ function generateMoves(
       break;
     }
     push(to, false);
+  }
+}
+
+/**
+ * The moves of a rider that bounces off the board edge: it reflects the
+ * direction component that would leave the board and carries on, stopping when
+ * it meets a piece or reaches a square it has already passed over. The path is
+ * accumulated so a dropping rider leaves its pieces on every square it crossed.
+ */
+function generateBounceMoves(
+  spec: MoveSpec,
+  direction: Tile,
+  piece: Piece,
+  occupantAt: (tile: Tile) => Piece | undefined,
+  push: (tile: Tile, capture: boolean, path?: Tile[]) => void,
+  pushSwap: (tile: Tile, other: Piece, path?: Tile[]) => void,
+): void {
+  const origin = piece.position;
+  const dir = { x: direction.x, y: direction.y };
+  let current = { x: origin.x, y: origin.y };
+  const visited = new Set<string>([`${origin.x},${origin.y}`]);
+  const path: Tile[] = [];
+  const maxSteps = spec.limit === 0 ? 64 : spec.limit;
+
+  for (let step = 0; step < maxSteps; step++) {
+    let next = { x: current.x + dir.x, y: current.y + dir.y };
+    if (!inBounds(next)) {
+      if (next.x < 0 || next.x > 7) dir.x = -dir.x;
+      if (next.y < 0 || next.y > 7) dir.y = -dir.y;
+      next = { x: current.x + dir.x, y: current.y + dir.y };
+      if (!inBounds(next)) break;
+    }
+    const key = `${next.x},${next.y}`;
+    if (visited.has(key)) break;
+    visited.add(key);
+
+    const occupant = occupantAt(next);
+    if (occupant) {
+      if (occupant.color !== piece.color) {
+        if (spec.replace !== "required") push(next, true, path);
+      } else if (spec.replace) {
+        pushSwap(next, occupant, path);
+      }
+      break;
+    }
+    if (spec.replace !== "required") push(next, false, path);
+    path.push(next);
+    current = next;
   }
 }

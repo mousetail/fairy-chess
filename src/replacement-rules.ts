@@ -45,6 +45,12 @@ export interface ReplacementRule {
    * pawn, yet against a normal pawn corps it dominates, so its rule adds 3.
    */
   positionalValue?: number;
+  /**
+   * Whether the rule introduces a piece that can only be played online or
+   * locally. Such a rule is left out of a game with an AI player, which cannot
+   * be taught the piece's movement.
+   */
+  onlineOnly?: boolean;
 }
 
 /**
@@ -77,7 +83,12 @@ function replace(from: PieceType, to: PieceType): ReplacementRule["apply"] {
 
 /** Builds a complexity-1 rule that swaps one `from` piece for `to`. */
 function rule(name: string, from: PieceType, to: PieceType): ReplacementRule {
-  return { name, complexity: 1, apply: replace(from, to) };
+  return {
+    name,
+    complexity: 1,
+    apply: replace(from, to),
+    onlineOnly: to.onlineOnly === true,
+  };
 }
 
 /**
@@ -87,6 +98,7 @@ function kingRule(name: string, to: PieceType): ReplacementRule {
   return {
     name,
     complexity: 1,
+    onlineOnly: to.onlineOnly === true,
     // Replaces both colors kings
     apply: (board, _color) => {
       const king = board.pieces.filter(
@@ -112,6 +124,7 @@ function pawnRule(name: string, file: number, to: PieceType): ReplacementRule {
   return {
     name,
     complexity: 1,
+    onlineOnly: to.onlineOnly === true,
     apply: (board, color) => {
       const pawn = board.pieces.find(
         (candidate) =>
@@ -146,6 +159,7 @@ function pawnSquadRule(
     name,
     complexity: 8,
     positionalValue,
+    onlineOnly: to.onlineOnly === true,
     apply: (board, color) => {
       const pawns = board.pieces.filter(
         (candidate) =>
@@ -167,6 +181,7 @@ function everyOtherPawnRule(
     name,
     complexity: 4,
     positionalValue,
+    onlineOnly: to.onlineOnly === true,
     apply: (board, color, random) => {
       let parity = random.next() < 0.5 ? 0 : 1;
       const pawns = board.pieces.filter(
@@ -198,6 +213,7 @@ function pawnSplitRule(
   return {
     name,
     complexity: 8,
+    onlineOnly: left.onlineOnly === true || right.onlineOnly === true,
     apply: (board, color) => {
       const pawns = board.pieces.filter(
         (candidate) =>
@@ -225,6 +241,7 @@ function pawnDoubleRowRule(name: string, to: PieceType): ReplacementRule {
   return {
     name,
     complexity: 16,
+    onlineOnly: to.onlineOnly === true,
     apply: (board, color) => {
       const pawns = board.pieces.filter(
         (candidate) =>
@@ -271,6 +288,10 @@ export const replacementRules: ReplacementRule[] = [
   rule("Queen → Wazir", pieceTypes.queen, pieceTypes.wazir),
   rule("Queen → Ferz", pieceTypes.queen, pieceTypes.ferz),
   rule("Queen → Pylon", pieceTypes.queen, pieceTypes.pylon),
+  rule("Queen → Magician", pieceTypes.queen, pieceTypes.magician),
+  rule("Bishop → Snake", pieceTypes.bishop, pieceTypes.snake),
+  rule("Knight → Chimpanzee", pieceTypes.knight, pieceTypes.chimpanzee),
+  rule("Rook → Spider", pieceTypes.rook, pieceTypes.spider),
   kingRule("King → Overlord", pieceTypes.overlord),
   kingRule("King → Paladin", pieceTypes.paladin),
   kingRule("King → Sun", pieceTypes.sun),
@@ -323,18 +344,26 @@ const KING_VARIANT_CHANCE = 0.35;
 
 /**
  * Applies replacement rules to `board` according to `level`.
+ *
+ * `allowOnlineOnly` is false for a game with an AI player, which cannot be
+ * taught the movement of a piece that uses a feature Fairy-Stockfish cannot
+ * express; such rules are left out so those pieces only appear in online and
+ * local games.
  */
 export function applyChaos(
   board: ChessBoardState,
   level: ChaosLevel,
   random: Random,
+  allowOnlineOnly = true,
 ): void {
   if (level.budget <= 0) return;
   // One roll decides the whole game: the king variants are only offered a
   // quarter of the time, so the classic king still shows up in most games.
   const allowKingVariants = random.next() < KING_VARIANT_CHANCE;
   const rules = replacementRules.filter(
-    (rule) => !rule.replacesKing || allowKingVariants,
+    (rule) =>
+      (!rule.replacesKing || allowKingVariants) &&
+      (allowOnlineOnly || !rule.onlineOnly),
   );
   if (level.asymmetric) {
     applyBalanced(board, rules, level.budget, random);
