@@ -74,7 +74,7 @@ const kingPieces = {
     value: 8,
     displayName: "Sun",
     description:
-      "Confined to the 2x3 rectangle it starts in; jumps to any square of it.",
+      "Can jump to any square in it's 3 by 2 jail.",
     diagram: {
       size: 5,
       rows: [".....", ".....", ".....", ".xxx.", ".xox."],
