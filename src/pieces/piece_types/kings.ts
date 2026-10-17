@@ -77,7 +77,7 @@ const kingPieces = {
       "Confined to the 2x3 rectangle it starts in; jumps to any square of it.",
     diagram: {
       size: 5,
-      rows: [".....", ".xxx.", ".xox.", ".....", "....."],
+      rows: [".....", ".....", ".....", ".xxx.", ".xox."],
     },
   },
 } satisfies Record<string, PieceType>;
