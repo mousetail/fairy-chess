@@ -142,7 +142,7 @@ const fairyPieces = {
     value: 5,
     displayName: "Magician",
     description:
-      "Swaps places with any friendly piece; cannot move or capture otherwise.",
+      "Drag over a friendly piece to swap spaces.",
     diagram: {
       size: 5,
       rows: ["xxxxx", "xxxxx", "xxoxx", "xxxxx", "xxxxx"],
@@ -156,10 +156,10 @@ const fairyPieces = {
     image: getPieceImageAsync("nature", "chimpanzee"),
     value: 4,
     displayName: "Chimpanzee",
-    description: "Moves to any empty square on the board; cannot capture.",
+    description: "Moves to any empty square on the board.",
     diagram: {
       size: 5,
-      rows: ["xxxxx", "xxxxx", "xxoxx", "xxxxx", "xxxxx"],
+      rows: ["xExxx", "xxxxx", "xxoxx", "xxxxx", "xxExx"],
     },
   },
   snake: {
@@ -173,7 +173,7 @@ const fairyPieces = {
     description: "Slides diagonally, bouncing off the board edges.",
     diagram: {
       size: 5,
-      rows: ["x...x", ".x.x.", "..o..", ".x.x.", "x...x"],
+      rows: [".x.x.", "x.x..", ".o...", "x.x..", ".x.x."],
     },
   },
   spider: {
@@ -185,7 +185,7 @@ const fairyPieces = {
     value: 5,
     displayName: "Spider",
     description:
-      "Slides like a rook, leaving an anchor on its starting square and every square it passes over.",
+      "Moves like a rook, leaving a trail of anchors",
     diagram: {
       size: 5,
       rows: ["..x..", "..x..", "xxoxx", "..x..", "..x.."],
@@ -201,7 +201,7 @@ const fairyPieces = {
     value: 0,
     displayName: "Anchor",
     description:
-      "Cannot move; disappears at the start of its owner's next turn.",
+      "Disappears at the start of next turn.",
     diagram: {
       size: 5,
       rows: [".....", ".....", "..o..", ".....", "....."],
