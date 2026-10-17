@@ -351,6 +351,22 @@ export class MatchmakingSession {
     this.connect();
   }
 
+  /**
+   * Asks the server for the game it is holding again, so a board taken down and
+   * put back up shows the moves played in between. The answer arrives the same
+   * way a rejoin's does, replacing what the game's board and move log hold.
+   */
+  refresh(): void {
+    if (this.gameId === null) return;
+    const client = this.client;
+    if (client && !client.closed) {
+      // A socket still opening rejoins when it opens, from joinNow.
+      if (client.isOpen) client.rejoin(this.gameId, this.playerId);
+      return;
+    }
+    this.connect();
+  }
+
   private connect(): void {
     // Where to connect is a deployment's decision. A build that was not given
     // one says so, rather than opening a socket to an address nobody chose.

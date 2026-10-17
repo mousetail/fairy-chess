@@ -88,21 +88,28 @@ export class HomeScreen implements Screen {
     parent.replaceChildren();
 
     const container = document.createElement("div");
+    container.classList.add('home-screen-container')
     parent.appendChild(container);
+
+    const headerDiv = document.createElement('div');
 
     const header = document.createElement("h1");
     header.textContent = "Fairy Chess";
-    container.appendChild(header);
+    headerDiv.appendChild(header);
+    container.appendChild(headerDiv);
 
+    const bodyDiv = document.createElement('div');
+    bodyDiv.classList.add('home-screen-body')
+    container.appendChild(bodyDiv);
     const description = document.createElement("p");
     description.classList.add("text-max-width");
     description.textContent = `Chess, but pieces are randomized with different variants. Includes ${Object.keys(pieceTypes).length + 6}
       piece types including ${Object.keys(kingPieces).length + 1} king variants and ${Object.keys(pawnPieces).length + 1} pawn variants.`;
-    container.appendChild(description);
+    headerDiv.appendChild(description);
 
     const modeSubHeader = document.createElement("h2");
     modeSubHeader.textContent = "Mode Preference";
-    container.appendChild(modeSubHeader);
+    bodyDiv.appendChild(modeSubHeader);
 
     const modeOptions = ["Local", "Online", "vs AI"];
     const modeRadio = this.createRadio(
@@ -111,7 +118,7 @@ export class HomeScreen implements Screen {
       this.indexOfOption(modeOptions, this.options.settings.mode),
     );
     modeRadio.element.classList.add("button-radio");
-    container.appendChild(modeRadio.element);
+    bodyDiv.appendChild(modeRadio.element);
 
     const aiOptions = document.createElement("div");
     aiOptions.classList.add("ai-options");
@@ -151,7 +158,7 @@ export class HomeScreen implements Screen {
     difficultySlider.element.classList.add("difficulty");
     aiOptions.appendChild(difficultySlider.element);
 
-    container.appendChild(aiOptions);
+    bodyDiv.appendChild(aiOptions);
 
     const onlineOptions = document.createElement("div");
     onlineOptions.classList.add("online-options");
@@ -190,7 +197,7 @@ export class HomeScreen implements Screen {
     timeControlSlider.element.classList.add("time-control");
     onlineOptions.appendChild(timeControlSlider.element);
 
-    container.appendChild(onlineOptions);
+    bodyDiv.appendChild(onlineOptions);
 
     const updateOptionVisibility = () => {
       const mode = modeRadio.getValue();
@@ -205,7 +212,7 @@ export class HomeScreen implements Screen {
 
     const chaosLevelSubHeader = document.createElement("h2");
     chaosLevelSubHeader.textContent = "Chaos Level Preference";
-    container.appendChild(chaosLevelSubHeader);
+    bodyDiv.appendChild(chaosLevelSubHeader);
 
     const chaosOptions = chaosLevels.map((level) => level.label);
     const chaosLevelSlider = this.createSlider(
@@ -217,12 +224,12 @@ export class HomeScreen implements Screen {
         2,
       ),
     );
-    container.appendChild(chaosLevelSlider.element);
+    bodyDiv.appendChild(chaosLevelSlider.element);
 
     const playButton = document.createElement("button");
     playButton.textContent = "Play";
     playButton.classList.add("button", "play-button");
-    container.appendChild(playButton);
+    bodyDiv.appendChild(playButton);
 
     const statusText = document.createElement("p");
     statusText.classList.add("online-status-text");
@@ -234,11 +241,11 @@ export class HomeScreen implements Screen {
     discoverySummary.textContent = discoverySummaryText(
       summarize(loadDiscoveries()),
     );
-    container.appendChild(discoverySummary);
+    bodyDiv.appendChild(discoverySummary);
 
     const actions = document.createElement("div");
     actions.classList.add("actions");
-    container.appendChild(actions);
+    bodyDiv.appendChild(actions);
 
     const discoveriesButton = document.createElement("button");
     discoveriesButton.classList.add("button", "discoveries-button");
@@ -322,10 +329,6 @@ export class HomeScreen implements Screen {
           minTurnTimeInput,
           difficultySlider.getValue(),
           settings.chaosLevel,
-          () => {
-            window.location.hash = "";
-            this.activate(parent);
-          },
         ),
       );
     });
@@ -366,11 +369,10 @@ export class HomeScreen implements Screen {
     minTurnTimeInput: HTMLInputElement,
     difficultyValue: string,
     chaosLevelValue: string,
-    onPlayAgain: () => void,
   ): ChessScreenOptions {
     const chaosLevel = this.chaosLevelIndex(chaosLevelValue);
 
-    if (mode !== "vs AI") return { chaosLevel, onPlayAgain };
+    if (mode !== "vs AI") return { chaosLevel };
 
     const seconds = Number.parseFloat(minTurnTimeInput.value);
     const minTurnTimeMs =
@@ -387,7 +389,7 @@ export class HomeScreen implements Screen {
       difficulty,
       minTurnTimeMs,
     };
-    return { black: opponent, chaosLevel, onPlayAgain };
+    return { black: opponent, chaosLevel };
   }
 
   createSlider(

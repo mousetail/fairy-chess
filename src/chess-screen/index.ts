@@ -131,7 +131,11 @@ export interface ChessScreenOptions {
    * still played out, but nothing is credited to this browser's discoveries.
    */
   review?: boolean;
-  onPlayAgain: () => void;
+  /**
+   * What the "Play again" button does. The button does nothing when it is
+   * absent, which only happens for a game whose app has yet to name its route.
+   */
+  onPlayAgain?: () => void;
 }
 
 /** What an online game needs that the screen cannot work out for itself. */
@@ -373,8 +377,10 @@ export default class ChessScreen implements Screen {
     parent.appendChild(this.scoreWidget);
     parent.appendChild(this.pieceInfoBar.element);
     this.playAgainButton.addEventListener("click", () => {
+      const onPlayAgain = this.options.onPlayAgain;
+      if (onPlayAgain === undefined) return;
       this.deactivate();
-      this.options.onPlayAgain();
+      onPlayAgain();
     });
 
     const actions = document.createElement("div");

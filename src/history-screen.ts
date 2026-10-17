@@ -1,5 +1,6 @@
 import { getImageFromPromise } from "./chess-screen/piece-images.ts";
 import { matchmakingUrl } from "./online/config.ts";
+import { gameHash } from "./online/game-link.ts";
 import pieceTypes from "./pieces/piece_types/index.ts";
 import type { Screen } from "./screen.ts";
 
@@ -18,11 +19,9 @@ function formatDate(date: string): string {
 
 export class HistoryScreen implements Screen {
   private readonly onBack: () => void;
-  private readonly onResume: (gameId: string) => void;
 
-  constructor(onBack: () => void, onResume: (gameId: string) => void) {
+  constructor(onBack: () => void) {
     this.onBack = onBack;
-    this.onResume = onResume;
   }
 
   activate(parent: HTMLElement): void {
@@ -66,21 +65,17 @@ export class HistoryScreen implements Screen {
 
           const tdWhite = document.createElement("td");
           const linkWhite = document.createElement("a");
-          linkWhite.href = "#" + game.id;
+          linkWhite.href = gameHash(game.id);
           linkWhite.textContent = game.white;
           tdWhite.appendChild(linkWhite);
           item.appendChild(tdWhite);
 
           const tdBlack = document.createElement("td");
           const linkBlack = document.createElement("a");
-          linkBlack.href = "#" + game.id;
+          linkBlack.href = gameHash(game.id);
           linkBlack.textContent = game.black;
           tdBlack.appendChild(linkBlack);
           item.appendChild(tdBlack);
-
-          [linkBlack, linkWhite].forEach((link) =>
-            link.addEventListener("click", () => this.onResume(game.id)),
-          );
 
           const tdResult = document.createElement("td");
           tdResult.textContent = game.result;
